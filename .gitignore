@@ -1,0 +1,24 @@
+# .env
+# /.env
+build
+/build
+uploads
+/build/
+/build/*
+/build/*.js
+dailyBackups
+/.sequelizerc
+/node_modules
+/dailyBackups
+/tsconfig.json
+/dailyBackups/
+/dailyBackups/*
+/logs/server.log
+/package-lock.json
+src/utils/constants.ts
+.idea/dataSources.xml
+.idea/lims-backend.iml
+# .gitignore
+.idea/php.xml
+.idea/modules.xml
+.idea/vcs.xml

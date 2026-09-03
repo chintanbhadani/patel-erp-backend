@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLANT_ADMIN
+  SHIFT_SUPERVISOR
+  QC_INSPECTOR
+  SALES_REP
+}
+
+enum Shift {
+  DAY
+  NIGHT
+}
+
+enum Machine {
+  A
+  B
+  C
+  D
+}
+
+enum RollStatus {
+  PENDING
+  QC_PASSED
+  QC_FAILED
+  SHIPPED
+}
+
+model User {
+  id               String              @id @default(uuid())
+  username         String              @unique
+  password         String
+  role             Role
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  jobs             ProductionJob[]
+  clients          Client[]
+  outlookConnection OutlookConnection?
+}
+
+model ProductionJob {
+  id               String       @id @default(uuid())
+  machine          Machine
+  shift            Shift
+  targetDimensions String
+  priority         Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  supervisorId     String?
+  supervisor       User?        @relation(fields: [supervisorId], references: [id])
+  rolls            RollEntry[]
+  qcLogs           QCLog[]
+}
+
+model RollEntry {
+  id             String        @id @default(uuid())
+  barcode        String        @unique
+  grossWeight    Float
+  coreTareWeight Float         @default(1.0)
+  netWeight      Float
+  status         RollStatus    @default(PENDING)
+  jobId          String
+  job            ProductionJob @relation(fields: [jobId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model QCLog {
+  id              String        @id @default(uuid())
+  tensileStrength Float
+  splitTest       Float
+  elongation      Float
+  gpm             Float         // Grams Per Meter
+  jobId           String
+  job             ProductionJob @relation(fields: [jobId], references: [id])
+  createdAt       DateTime      @default(now())
+}
+
+model Inventory {
+  id               String   @id @default(uuid())
+  materialName     String   @unique
+  quantityKg       Float    @default(0)
+  lastUpdated      DateTime @updatedAt
+}
+
+model Client {
+  id               String    @id @default(uuid())
+  companyName      String
+  email            String?
+  phone            String?
+  gstNumber        String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  assignedRepId    String
+  assignedRep      User      @relation(fields: [assignedRepId], references: [id])
+  inquiries        Inquiry[]
+}
+
+model Inquiry {
+  id           String   @id @default(uuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id])
+  sizeInTons   Float
+  quotedPrice  Float
+  status       String   @default("OPEN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model OutlookConnection {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
