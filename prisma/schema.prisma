@@ -83,11 +83,111 @@ model QCLog {
   createdAt       DateTime      @default(now())
 }
 
-model Inventory {
-  id               String   @id @default(uuid())
-  materialName     String   @unique
-  quantityKg       Float    @default(0)
-  lastUpdated      DateTime @updatedAt
+enum Status {
+  Active
+  Inactive
+}
+
+model Supplier {
+  id       String    @id @default(uuid())
+  name     String
+  contact  String?
+  email    String?
+  products Product[]
+  invoices Invoice[]
+}
+
+model Category {
+  id         String      @id @default(uuid())
+  name       String
+  products   Product[]
+  skuMasters SkuMaster[]
+}
+
+model Unit {
+  id       String    @id @default(uuid())
+  name     String
+  products Product[]
+}
+
+model Product {
+  id            String        @id @default(uuid())
+  sku           String        @unique
+  name          String
+  quantity      Int           @default(0)
+  cost_price    Decimal       @db.Decimal(10, 2)
+  selling_price Decimal       @db.Decimal(10, 2)
+  min_stock     Int           @default(0)
+  location      String?
+  status        Status        @default(Active)
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id])
+  supplierId    String
+  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  invoiceDate   DateTime?
+  unitId        String?
+  unit          Unit?         @relation(fields: [unitId], references: [id])
+  invoiceItems  InvoiceItem[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum InvoiceType {
+  PURCHASE
+  SALES
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  type          InvoiceType
+  date          DateTime      @default(now())
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  items         InvoiceItem[]
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InvoiceItem {
+  id         String  @id @default(uuid())
+  invoiceId  String
+  invoice    Invoice @relation(fields: [invoiceId], references: [id])
+  productId  String
+  product    Product @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+}
+
+model SkuMaster {
+  id         String    @id @default(uuid())
+  name       String
+  sku        String    @unique
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ExpenseMaster {
+  id          String   @id @default(uuid())
+  description String   @unique
+  createdAt   DateTime @default(now())
 }
 
 model Client {
@@ -101,6 +201,7 @@ model Client {
   assignedRepId    String
   assignedRep      User      @relation(fields: [assignedRepId], references: [id])
   inquiries        Inquiry[]
+  invoices         Invoice[]
 }
 
 model Inquiry {

@@ -10,6 +10,12 @@ import inventoryRouter from './routes/inventory';
 import authRouter from './routes/auth';
 import clientsRouter from './routes/clients';
 import outlookRouter from './routes/outlook';
+import expenseRouter from './routes/expense.routes';
+import invoiceRouter from './routes/invoice.routes';
+import categoryRouter from './routes/category.routes';
+import supplierRouter from './routes/supplier.routes';
+import unitRouter from './routes/unit.routes';
+import skuMasterRouter from './routes/skuMaster.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -43,6 +49,12 @@ app.use('/api/jobs', jobsRouter);
 app.use('/api/inventory', inventoryRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/outlook', outlookRouter);
+app.use('/api/expenses', expenseRouter);
+app.use('/api/invoices', invoiceRouter);
+app.use('/api/categories', categoryRouter);
+app.use('/api/suppliers', supplierRouter);
+app.use('/api/units', unitRouter);
+app.use('/api/skuMaster', skuMasterRouter);
 
 // Start IoT Scale Listener (TCP Server on port 9000)
 setupIotScaleListener(io, 9000);
