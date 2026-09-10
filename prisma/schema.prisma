@@ -225,3 +225,10 @@ model OutlookConnection {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+model Inventory {
+  id           String   @id @default(uuid())
+  materialName String   @unique
+  quantityKg   Float    @default(0)
+  lastUpdated  DateTime @default(now()) @updatedAt
+}
