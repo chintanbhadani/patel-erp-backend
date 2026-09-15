@@ -8,7 +8,18 @@ const prisma = new PrismaClient();
 // GET all SKUs
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
+    const { search } = req.query;
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        { category: { name: { contains: q, mode: 'insensitive' } } }
+      ];
+    }
     const skus = await prisma.skuMaster.findMany({
+      where,
       include: { category: true },
       orderBy: { name: 'asc' }
     });

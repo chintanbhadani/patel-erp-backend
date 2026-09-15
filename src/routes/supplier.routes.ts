@@ -8,7 +8,18 @@ const prisma = new PrismaClient();
 // GET all suppliers
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
+    const { search } = req.query;
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { contact: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } }
+      ];
+    }
     const suppliers = await prisma.supplier.findMany({
+      where,
       orderBy: { name: 'asc' }
     });
     res.json(suppliers);

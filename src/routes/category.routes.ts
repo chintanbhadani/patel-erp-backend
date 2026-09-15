@@ -8,7 +8,13 @@ const prisma = new PrismaClient();
 // GET all categories
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
+    const { search } = req.query;
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      where.name = { contains: search.trim(), mode: 'insensitive' };
+    }
     const categories = await prisma.category.findMany({
+      where,
       orderBy: { name: 'asc' }
     });
     res.json(categories);

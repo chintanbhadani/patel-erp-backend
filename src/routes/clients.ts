@@ -8,7 +8,18 @@ const prisma = new PrismaClient();
 // Get all clients
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
   try {
+    const { search } = req.query;
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { companyName: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } }
+      ];
+    }
     const clients = await prisma.client.findMany({
+      where,
       include: {
         assignedRep: { select: { id: true, username: true, role: true } },
         inquiries: true
