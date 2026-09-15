@@ -43,6 +43,7 @@ model User {
   jobs             ProductionJob[]
   clients          Client[]
   outlookConnection OutlookConnection?
+  activities       ActivityLog[]
 }
 
 model ProductionJob {
@@ -95,6 +96,8 @@ model Supplier {
   email    String?
   products Product[]
   invoices Invoice[]
+  payments Payment[]
+  grns     Grn[]
 }
 
 model Category {
@@ -120,14 +123,16 @@ model Product {
   min_stock     Int           @default(0)
   location      String?
   status        Status        @default(Active)
-  categoryId    String
-  category      Category      @relation(fields: [categoryId], references: [id])
-  supplierId    String
-  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  categoryId    String?
+  category      Category?     @relation(fields: [categoryId], references: [id])
+  supplierId    String?
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
   invoiceDate   DateTime?
   unitId        String?
   unit          Unit?         @relation(fields: [unitId], references: [id])
   invoiceItems  InvoiceItem[]
+  stockLedgers  StockLedger[]
+  grnItems      GrnItem[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -137,13 +142,34 @@ enum InvoiceType {
   SALES
 }
 
+enum PaymentType {
+  CASH
+  BANK
+}
+
+enum GrnStatus {
+  DRAFT
+  PENDING_INSPECTION
+  ACCEPTED
+  REJECTED
+  PARTIALLY_ACCEPTED
+}
+
 model Invoice {
   id            String        @id @default(uuid())
   invoiceNumber String        @unique
   type          InvoiceType
   date          DateTime      @default(now())
   totalAmount   Decimal       @db.Decimal(10, 2)
+  paymentType   PaymentType   @default(CASH)
+  cashAmount    Decimal       @default(0) @db.Decimal(10, 2)
+  bankAmount    Decimal       @default(0) @db.Decimal(10, 2)
+  creditAmount  Decimal       @default(0) @db.Decimal(10, 2)
+  grnStatus     String        @default("PENDING_GRN")
   items         InvoiceItem[]
+  stockLedgers  StockLedger[]
+  payments      Payment[]
+  grns          Grn[]
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])
@@ -190,6 +216,28 @@ model ExpenseMaster {
   createdAt   DateTime @default(now())
 }
 
+model QualityParameter {
+  id             String    @id @default(uuid())
+  parameter_name String
+  unit           String?
+  min_value      Float?
+  max_value      Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  entityType  String
+  entityId    String
+  action      String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
+
 model Client {
   id               String    @id @default(uuid())
   companyName      String
@@ -198,10 +246,11 @@ model Client {
   gstNumber        String?   @unique
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-  assignedRepId    String
-  assignedRep      User      @relation(fields: [assignedRepId], references: [id])
+  assignedRepId    String?
+  assignedRep      User?     @relation(fields: [assignedRepId], references: [id])
   inquiries        Inquiry[]
   invoices         Invoice[]
+  payments         Payment[]
 }
 
 model Inquiry {
@@ -232,3 +281,68 @@ model Inventory {
   quantityKg   Float    @default(0)
   lastUpdated  DateTime @default(now()) @updatedAt
 }
+
+model StockLedger {
+  id             String   @id @default(uuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  date           DateTime // The transaction/invoice date
+  type           String // 'PURCHASE', 'SALES', 'INITIAL', 'ADJUSTMENT'
+  quantityChange Int
+  runningBalance Int
+  invoiceId      String?
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Payment {
+  id            String      @id @default(uuid())
+  date          DateTime    @default(now())
+  paymentType   PaymentType // CASH or BANK
+  direction     String      // "IN" or "OUT"
+  amount        Decimal     @db.Decimal(10, 2)
+  description   String?
+  
+  clientId      String?
+  client        Client?     @relation(fields: [clientId], references: [id])
+  
+  supplierId    String?
+  supplier      Supplier?   @relation(fields: [supplierId], references: [id])
+  
+  invoiceId     String?
+  invoice       Invoice?    @relation(fields: [invoiceId], references: [id])
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Grn {
+  id           String    @id @default(uuid())
+  grnNumber    String    @unique
+  invoiceId    String
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id])
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  receivedDate DateTime  @default(now())
+  status       GrnStatus @default(PENDING_INSPECTION)
+  notes        String?
+  items        GrnItem[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model GrnItem {
+  id               String  @id @default(uuid())
+  grnId            String
+  grn              Grn     @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product @relation(fields: [productId], references: [id])
+  orderedQuantity  Int
+  receivedQuantity Int
+  acceptedQuantity Int
+  rejectedQuantity Int     @default(0)
+  unitPrice        Decimal @db.Decimal(10, 2)
+  remarks          String?
+}
+

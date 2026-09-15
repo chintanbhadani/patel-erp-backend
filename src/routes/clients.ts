@@ -50,7 +50,7 @@ router.post('/check-conflict', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async 
       // It's assigned to someone else
       return res.json({
         conflict: true,
-        message: `Warning: This client is already communicating with ${existingClient.assignedRep.username}.`,
+        message: `Warning: This client is already communicating with ${existingClient.assignedRep?.username || 'another representative'}.`,
         client: existingClient
       });
     }
@@ -66,7 +66,14 @@ router.post('/check-conflict', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async 
 router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
   try {
     const { companyName, email, phone, gstNumber } = req.body;
-    const currentUserId = (req as any).user.id;
+    const currentUserId = (req as any).user?.id;
+
+    // Verify the userId is a real DB row (dev-mode bypass sets id='dev-user' which doesn't exist)
+    let resolvedRepId: string | null = null;
+    if (currentUserId) {
+      const userExists = await prisma.user.findUnique({ where: { id: currentUserId } });
+      resolvedRepId = userExists ? currentUserId : null;
+    }
 
     const client = await prisma.client.create({
       data: {
@@ -74,7 +81,7 @@ router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => 
         email,
         phone,
         gstNumber,
-        assignedRepId: currentUserId
+        assignedRepId: resolvedRepId
       }
     });
 

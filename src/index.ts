@@ -16,6 +16,10 @@ import categoryRouter from './routes/category.routes';
 import supplierRouter from './routes/supplier.routes';
 import unitRouter from './routes/unit.routes';
 import skuMasterRouter from './routes/skuMaster.routes';
+import productRouter from './routes/product.routes';
+import activityRouter from './routes/activity.routes';
+import stockEntryRouter from './routes/stockEntry.routes';
+import grnRouter from './routes/grn.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -46,7 +50,8 @@ app.get('/api/financials', authorizeRole('PLANT_ADMIN'), (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/jobs', jobsRouter);
-app.use('/api/inventory', inventoryRouter);
+app.use('/api/inventory', inventoryRouter); // Plant Inventory (Raw Materials)
+app.use('/api/products', productRouter); // Product Inventory (Aura ERP)
 app.use('/api/clients', clientsRouter);
 app.use('/api/outlook', outlookRouter);
 app.use('/api/expenses', expenseRouter);
@@ -55,6 +60,9 @@ app.use('/api/categories', categoryRouter);
 app.use('/api/suppliers', supplierRouter);
 app.use('/api/units', unitRouter);
 app.use('/api/skuMaster', skuMasterRouter);
+app.use('/api/activities', activityRouter);
+app.use('/api/stock-entries', stockEntryRouter);
+app.use('/api/grn', grnRouter);
 
 // Start IoT Scale Listener (TCP Server on port 9000)
 setupIotScaleListener(io, 9000);

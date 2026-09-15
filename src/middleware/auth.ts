@@ -34,3 +34,20 @@ export function authorizeRole(...allowedRoles: string[]) {
     }
   };
 }
+
+export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      // Dev mode bypass
+      req.user = { id: 'dev-user', username: 'dev', role: 'user' };
+      return next();
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+  }
+}
