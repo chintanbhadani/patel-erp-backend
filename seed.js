@@ -6,18 +6,27 @@ async function main() {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash('password123', salt);
 
-  const user = await prisma.user.upsert({ 
-    where: { username: 'admin@patelpetstrap.com' },
-    update: {
-      password: hashedPassword
-    },
-    create: {
-      username: 'admin@patelpetstrap.com',
-      password: hashedPassword,
-      role: 'PLANT_ADMIN',
-    },
-  });
-  console.log('Seed created user:', user);
+  const usersToSeed = [
+    { username: 'admin@patelpetstrap.com', role: 'PLANT_ADMIN' },
+    { username: 'payroll.tz@neelkanth.com', role: 'PLANT_ADMIN' },
+    { username: 'admin', role: 'PLANT_ADMIN' }
+  ];
+
+  for (const u of usersToSeed) {
+    const user = await prisma.user.upsert({ 
+      where: { username: u.username },
+      update: {
+        password: hashedPassword,
+        role: u.role
+      },
+      create: {
+        username: u.username,
+        password: hashedPassword,
+        role: u.role,
+      },
+    });
+    console.log('Seeded user:', user.username);
+  }
 }
 
 main()

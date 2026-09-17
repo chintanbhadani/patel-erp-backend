@@ -13,15 +13,34 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    const user = await prisma.user.findUnique({
-      where: { username }
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const cleanUsername = String(username).trim();
+    const cleanPassword = String(password).trim();
+
+    // Find user by exact match or case-insensitive match
+    let user = await prisma.user.findUnique({
+      where: { username: cleanUsername }
     });
+
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          username: {
+            equals: cleanUsername,
+            mode: 'insensitive'
+          }
+        }
+      });
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(cleanPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -37,6 +56,7 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
+    console.error('Login route error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
