@@ -20,6 +20,7 @@ import productRouter from './routes/product.routes';
 import activityRouter from './routes/activity.routes';
 import stockEntryRouter from './routes/stockEntry.routes';
 import grnRouter from './routes/grn.routes';
+import uploadRouter from './routes/upload.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -36,7 +37,8 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Routes setup
 app.get('/health', (req, res) => {
@@ -63,6 +65,7 @@ app.use('/api/skuMaster', skuMasterRouter);
 app.use('/api/activities', activityRouter);
 app.use('/api/stock-entries', stockEntryRouter);
 app.use('/api/grn', grnRouter);
+app.use('/api/upload', uploadRouter);
 
 // Start IoT Scale Listener (TCP Server on port 9000)
 setupIotScaleListener(io, 9000);

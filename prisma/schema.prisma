@@ -114,27 +114,54 @@ model Unit {
 }
 
 model Product {
-  id            String        @id @default(uuid())
-  sku           String        @unique
-  name          String
-  quantity      Int           @default(0)
-  cost_price    Decimal       @db.Decimal(10, 2)
-  selling_price Decimal       @db.Decimal(10, 2)
-  min_stock     Int           @default(0)
-  location      String?
-  status        Status        @default(Active)
-  categoryId    String?
-  category      Category?     @relation(fields: [categoryId], references: [id])
-  supplierId    String?
-  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
-  invoiceDate   DateTime?
-  unitId        String?
-  unit          Unit?         @relation(fields: [unitId], references: [id])
-  invoiceItems  InvoiceItem[]
-  stockLedgers  StockLedger[]
-  grnItems      GrnItem[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                      String        @id @default(uuid())
+  sku                     String        @unique
+  name                    String
+  quantity                Int           @default(0)
+  cost_price              Decimal       @db.Decimal(10, 2)
+  selling_price           Decimal       @db.Decimal(10, 2)
+  min_stock               Int           @default(0)
+  location                String?
+  status                  Status        @default(Active)
+  categoryId              String?
+  category                Category?     @relation(fields: [categoryId], references: [id])
+  supplierId              String?
+  supplier                Supplier?     @relation(fields: [supplierId], references: [id])
+  invoiceDate             DateTime?
+  unitId                  String?
+  unit                    Unit?         @relation(fields: [unitId], references: [id])
+
+  // ERPNext Item Master Extended Fields
+  company                 String?
+  partOf                  String?
+  subPartOf               String?
+  tansadNo                String?
+  withholdingTaxPurchase  Float?        @default(0)
+  withholdingTaxSales     Float?        @default(0)
+  activityType            String?
+  disabled                Boolean       @default(false)
+  allowAlternativeItem    Boolean       @default(false)
+  maintainStock           Boolean       @default(true)
+  excisableItem           Boolean       @default(false)
+  hasVariants             Boolean       @default(false)
+  includeInManufacturing  Boolean       @default(true)
+  isFixedAsset            Boolean       @default(false)
+  valuationRate           Decimal?      @default(0) @db.Decimal(10, 2)
+  overDeliveryAllowance   Float?        @default(0)
+  overBillingAllowance    Float?        @default(0)
+  assignedTo              String?
+  tags                    String?
+  imageUrl                String?
+  incomeAccount           String?
+  expenseAccount          String?
+  hsnCode                 String?
+  taxRate                 Float?        @default(18)
+
+  invoiceItems            InvoiceItem[]
+  stockLedgers            StockLedger[]
+  grnItems                GrnItem[]
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 }
 
 enum InvoiceType {
