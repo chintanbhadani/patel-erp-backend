@@ -419,13 +419,13 @@ router.post('/', async (req: Request, res: Response) => {
       console.error('Failed to sync SkuMaster on product create:', e);
     }
 
-    res.status(201).json(product);
+    res.status(201).json({ message: 'Item created successfully', ...product });
   } catch (error: any) {
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'SKU must be unique' });
+      return res.status(409).json({ error: 'SKU must be unique', message: 'SKU must be unique' });
     }
     console.error('Failed to create product:', error);
-    res.status(500).json({ error: 'Failed to create product' });
+    res.status(500).json({ error: 'Failed to create product', message: 'Failed to create product' });
   }
 });
 
@@ -494,10 +494,13 @@ router.put('/:id', async (req: Request, res: Response) => {
       console.error('Failed to sync SkuMaster on product update:', e);
     }
 
-    res.json(product);
-  } catch (error) {
+    res.status(200).json({ message: 'Item updated successfully', ...product });
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'SKU must be unique', message: 'SKU must be unique' });
+    }
     console.error('Failed to update product:', error);
-    res.status(500).json({ error: 'Failed to update product' });
+    res.status(500).json({ error: 'Failed to update product', message: 'Failed to update product' });
   }
 });
 

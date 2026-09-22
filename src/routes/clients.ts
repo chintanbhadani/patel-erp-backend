@@ -76,7 +76,7 @@ router.post('/check-conflict', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async 
 // Create a new client
 router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
   try {
-    const { companyName, email, phone, gstNumber } = req.body;
+    const { companyName, email, phone, gstNumber, imageUrl, attachments } = req.body;
     const currentUserId = (req as any).user?.id;
 
     // Verify the userId is a real DB row (dev-mode bypass sets id='dev-user' which doesn't exist)
@@ -92,6 +92,8 @@ router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => 
         email,
         phone,
         gstNumber,
+        imageUrl: imageUrl || null,
+        attachments: attachments || [],
         assignedRepId: resolvedRepId
       }
     });
@@ -103,6 +105,31 @@ router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => 
       return res.status(400).json({ error: 'A client with this GST Number already exists' });
     }
     res.status(500).json({ error: 'Failed to create client' });
+  }
+});
+
+// Update a client
+router.put('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { companyName, email, phone, gstNumber, imageUrl, attachments } = req.body;
+
+    const client = await prisma.client.update({
+      where: { id },
+      data: {
+        companyName: companyName !== undefined ? companyName : undefined,
+        email: email !== undefined ? email : undefined,
+        phone: phone !== undefined ? phone : undefined,
+        gstNumber: gstNumber !== undefined ? gstNumber : undefined,
+        imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+        attachments: attachments !== undefined ? attachments : undefined
+      }
+    });
+
+    res.json(client);
+  } catch (error: any) {
+    console.error('Error updating client:', error);
+    res.status(500).json({ error: 'Failed to update client' });
   }
 });
 
