@@ -21,6 +21,8 @@ import activityRouter from './routes/activity.routes';
 import stockEntryRouter from './routes/stockEntry.routes';
 import grnRouter from './routes/grn.routes';
 import uploadRouter from './routes/upload.routes';
+import materialRequestRouter from './routes/materialRequest.routes';
+import purchaseOrderRouter from './routes/purchaseOrder.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -66,6 +68,8 @@ app.use('/api/activities', activityRouter);
 app.use('/api/stock-entries', stockEntryRouter);
 app.use('/api/grn', grnRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/material-request', materialRequestRouter);
+app.use('/api/purchase-orders', purchaseOrderRouter);
 
 // Start IoT Scale Listener (TCP Server on port 9000)
 setupIotScaleListener(io, 9000);
