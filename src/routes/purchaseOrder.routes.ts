@@ -3,7 +3,37 @@ import { Router, Request, Response } from 'express';
 const router = Router();
 
 // In-memory Purchase Order store initialized with default sample data
-let purchaseOrders: any[] = [
+export let purchaseOrders: any[] = [
+  {
+    id: 'PO-2026-09-00008',
+    series: 'NCL-.2026.-.09.-',
+    status: 'Partially Received',
+    approvalStatus: 'Approved',
+    company: 'PATEL STRAP INDUSTRIES LTD',
+    supplier: 'MAIKA GENERAL SUPPLIES',
+    transactionDate: '2026-09-01',
+    requiredByDate: '2026-09-25',
+    paymentTerms: 'Credit',
+    purchaseType: 'Local',
+    tin: '100-220-330',
+    vrn: '40-001299-M',
+    pfiNo: 'PFI-2026-08',
+    user: 'Harsh Thakkar',
+    contact: '+255 754 000 999',
+    email: 'info@maikageneral.com',
+    setWarehouse: 'Main Store - PSL',
+    currency: 'INR',
+    priceList: 'Standard Buying',
+    applyTaxWithholding: false,
+    isSubcontracted: false,
+    assignedTo: 'Harsh Thakkar',
+    createdBy: 'Harsh Thakkar',
+    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    items: [
+      { id: '1', itemCode: 'NLMS011: OXYGEN CYLINDER 8.5', requiredByDate: '2026-09-25', itemGroup: 'CONSUMABLE', quantity: 100, uom: 'Pcs', rate: 30000, receivedQty: 64, amount: 3000000 },
+      { id: '2', itemCode: 'NLMS033: LPG CYLINDER', requiredByDate: '2026-09-25', itemGroup: 'CONSUMABLE', quantity: 20, uom: 'Pcs', rate: 140000, receivedQty: 2, amount: 2800000 }
+    ]
+  },
   {
     id: 'PO-2026-09-00001',
     series: 'NCL-.2026.-.09.-',
