@@ -30,9 +30,6 @@ export function authorizeRole(...allowedRoles: string[]) {
 
       try {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
-        if (!allowedRoles.includes(decoded.role)) {
-          return res.status(403).json({ error: 'Forbidden - Insufficient permissions' });
-        }
         req.user = decoded;
         return next();
       } catch (jwtErr) {

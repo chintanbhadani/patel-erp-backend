@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import * as xlsx from 'xlsx';
+import { logActivity, createFieldDiffDescription } from '../services/activityLogger';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -65,21 +66,21 @@ async function calculateValuationsForProduct(product: any, ledgers: any[]) {
 }
 
 const INITIAL_ITEMS = [
-  { sku: 'TAN2141', name: 'PLIER SET', partOf: 'CONSUMABLE', location: 'D-31', company: 'TANSA', assignedTo: 'Administrator', tags: 'TOOLS,CONSUMABLE', disabled: false },
-  { sku: 'TAN1989', name: 'BIT DIA. 115 MM DRILLIN', partOf: 'DRILLING MACHINE', location: 'Q-03', company: 'TANSA', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'TAN1550', name: 'HSS DRILL BIT 2- 8MM', partOf: 'CONSUMABLE', location: 'LOCKER-A', company: 'TANSA', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW592', name: 'BOX SPANNER 50MM X', partOf: 'HARDWARE', location: 'A1-28', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'NLHW573', name: 'CIRCLIP PLIER INTERNA', partOf: 'HARDWARE', location: 'LOCKER-B', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'NLHW571', name: 'STRAIGHT TIP LOCK RING', partOf: 'HARDWARE', location: 'E-11', company: 'NEELKANTH', assignedTo: 'System User', tags: 'HARDWARE', disabled: false },
-  { sku: 'NLHW516', name: 'ADJUSTABLE SPANNER', partOf: 'HARDWARE', location: 'D-49', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'NLHW435', name: 'DRILL BIT STEEL 22 MM', partOf: 'HARDWARE', location: 'D-26', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW434', name: 'DRILL BIT STEEL 20 MM', partOf: 'HARDWARE', location: 'D-26', company: 'NEELKANTH', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW432', name: 'ACCESSORIES FOR MIN', partOf: 'HARDWARE', location: 'I-36', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'NLHW416', name: 'DRILL BIT HSS 13 MM', partOf: 'HARDWARE', location: 'D-32', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW402', name: 'COMBINATION SPANNER 24MM', partOf: 'HARDWARE', location: 'A1-25', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW337', name: 'COMBINATION SPANNER 22MM', partOf: 'HARDWARE', location: 'D-48', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW190', name: 'DRILL BIT MAGNETIC 22MM', partOf: 'HARDWARE', location: 'D-33', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'NLHW177', name: 'COMBINATION SPANNER 19MM', partOf: 'HARDWARE', location: 'D-31', company: 'NEELKANTH', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false }
+  { sku: 'PSTL001', name: 'PLIER SET', partOf: 'CONSUMABLE', location: 'D-31', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS,CONSUMABLE', disabled: false },
+  { sku: 'PSTL002', name: 'BIT DIA. 115 MM DRILLIN', partOf: 'DRILLING MACHINE', location: 'Q-03', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSTL003', name: 'HSS DRILL BIT 2- 8MM', partOf: 'CONSUMABLE', location: 'LOCKER-A', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW001', name: 'BOX SPANNER 50MM X', partOf: 'HARDWARE', location: 'A1-28', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
+  { sku: 'PSHW002', name: 'CIRCLIP PLIER INTERNA', partOf: 'HARDWARE', location: 'LOCKER-B', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
+  { sku: 'PSHW003', name: 'STRAIGHT TIP LOCK RING', partOf: 'HARDWARE', location: 'E-11', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'System User', tags: 'HARDWARE', disabled: false },
+  { sku: 'PSHW004', name: 'ADJUSTABLE SPANNER', partOf: 'HARDWARE', location: 'D-49', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
+  { sku: 'PSHW005', name: 'DRILL BIT STEEL 22 MM', partOf: 'HARDWARE', location: 'D-26', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW006', name: 'DRILL BIT STEEL 20 MM', partOf: 'HARDWARE', location: 'D-26', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW007', name: 'ACCESSORIES FOR MIN', partOf: 'HARDWARE', location: 'I-36', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
+  { sku: 'PSHW008', name: 'DRILL BIT HSS 13 MM', partOf: 'HARDWARE', location: 'D-32', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW009', name: 'COMBINATION SPANNER 24MM', partOf: 'HARDWARE', location: 'A1-25', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW010', name: 'COMBINATION SPANNER 22MM', partOf: 'HARDWARE', location: 'D-48', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW011', name: 'DRILL BIT MAGNETIC 22MM', partOf: 'HARDWARE', location: 'D-33', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
+  { sku: 'PSHW012', name: 'COMBINATION SPANNER 19MM', partOf: 'HARDWARE', location: 'D-31', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false }
 ];
 
 async function ensureSeedProducts() {
@@ -354,17 +355,77 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+async function generateNextItemCodeBackend(companyName?: string, categoryId?: number | null, requestedSku?: string): Promise<string> {
+  let compPrefix = 'PS';
+  const compUpper = (companyName || '').toUpperCase();
+  if (compUpper.includes('TANSA')) compPrefix = 'TAN';
+  else if (compUpper.includes('NEELKANTH')) compPrefix = 'NG';
+
+  let groupCode = 'TL';
+  if (categoryId) {
+    const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } });
+    if (cat && cat.name) {
+      const g = cat.name.toUpperCase();
+      if (g.includes('TOOL')) groupCode = 'TL';
+      else if (g.includes('HARDWARE')) groupCode = 'HW';
+      else if (g.includes('CONSUMABLE')) groupCode = 'CM';
+      else if (g.includes('ELECTRICAL')) groupCode = 'EL';
+      else if (g.includes('STEEL')) groupCode = 'ST';
+      else if (g.includes('RAW')) groupCode = 'RM';
+      else if (g.includes('MACHINE') || g.includes('SPARE')) groupCode = 'HL';
+      else if (g.length >= 2) groupCode = g.substring(0, 2);
+    }
+  }
+
+  const prefix = `${compPrefix}${groupCode}`;
+
+  if (requestedSku && requestedSku.trim()) {
+    const existing = await prisma.product.findUnique({ where: { sku: requestedSku.trim() } });
+    if (!existing) {
+      return requestedSku.trim();
+    }
+  }
+
+  const allProducts = await prisma.product.findMany({
+    select: { sku: true }
+  });
+
+  let maxSeq = 0;
+  allProducts.forEach(p => {
+    const s = p.sku.toUpperCase();
+    if (s.startsWith(prefix)) {
+      const numPart = s.substring(prefix.length);
+      const num = parseInt(numPart, 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+
+  let candidateSeq = maxSeq + 1;
+  let candidateSku = `${prefix}${String(candidateSeq).padStart(candidateSeq >= 1000 ? 4 : 3, '0')}`;
+
+  while (await prisma.product.findUnique({ where: { sku: candidateSku } })) {
+    candidateSeq++;
+    candidateSku = `${prefix}${String(candidateSeq).padStart(candidateSeq >= 1000 ? 4 : 3, '0')}`;
+  }
+
+  return candidateSku;
+}
+
 // POST new item
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    if (!data.sku || !data.name) {
-      return res.status(400).json({ error: 'Missing required fields: sku, name' });
+    if (!data.name) {
+      return res.status(400).json({ error: 'Missing required field: name' });
     }
+
+    const finalSku = await generateNextItemCodeBackend(data.company, data.categoryId, data.sku);
 
     const product = await prisma.product.create({
       data: {
-        sku: data.sku,
+        sku: finalSku,
         name: data.name,
         quantity: 0,
         cost_price: parseFloat(data.cost_price) || 0,
@@ -396,6 +457,7 @@ router.post('/', async (req: Request, res: Response) => {
         assignedTo: data.assignedTo || null,
         tags: data.tags || null,
         imageUrl: data.imageUrl || null,
+        attachments: data.attachments || null,
         incomeAccount: data.incomeAccount || null,
         expenseAccount: data.expenseAccount || null,
         hsnCode: data.hsnCode || null,
@@ -419,6 +481,16 @@ router.post('/', async (req: Request, res: Response) => {
       console.error('Failed to sync SkuMaster on product create:', e);
     }
 
+    // Log Activity in DB
+    await logActivity({
+      entityType: 'Item',
+      entityId: product.id,
+      action: 'CREATE',
+      description: `Created new item ${product.name}`,
+      userId: (req as any).user?.id || (data as any).userId,
+      metadata: { sku: product.sku, name: product.name }
+    });
+
     res.status(201).json({ message: 'Item created successfully', ...product });
   } catch (error: any) {
     if (error.code === 'P2002') {
@@ -434,6 +506,15 @@ router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const data = req.body;
+
+    const oldProduct = await prisma.product.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        supplier: true,
+        unit: true
+      }
+    });
 
     const product = await prisma.product.update({
       where: { id },
@@ -471,6 +552,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         assignedTo: data.assignedTo,
         tags: data.tags,
         imageUrl: data.imageUrl,
+        attachments: data.attachments !== undefined ? data.attachments : undefined,
         incomeAccount: data.incomeAccount,
         expenseAccount: data.expenseAccount,
         hsnCode: data.hsnCode,
@@ -494,6 +576,20 @@ router.put('/:id', async (req: Request, res: Response) => {
       console.error('Failed to sync SkuMaster on product update:', e);
     }
 
+    const diffDescription = oldProduct
+      ? createFieldDiffDescription(oldProduct, product)
+      : `updated item ${product.name}`;
+
+    // Log Activity in DB
+    await logActivity({
+      entityType: 'Item',
+      entityId: product.id,
+      action: 'UPDATE',
+      description: diffDescription,
+      userId: (req as any).user?.id || (data as any).userId,
+      metadata: { sku: product.sku, name: product.name }
+    });
+
     res.status(200).json({ message: 'Item updated successfully', ...product });
   } catch (error: any) {
     if (error.code === 'P2002') {
@@ -511,6 +607,16 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await prisma.product.delete({
       where: { id },
     });
+
+    // Log Activity in DB
+    await logActivity({
+      entityType: 'Item',
+      entityId: id,
+      action: 'DELETE',
+      description: `Deleted item`,
+      userId: (req as any).user?.id
+    });
+
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete product' });

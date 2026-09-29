@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorizeRole } from '../middleware/auth';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -15,7 +16,7 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
     }
     const categories = await prisma.category.findMany({
       where,
-      orderBy: { name: 'asc' }
+      orderBy: { id: 'asc' }
     });
     res.json(categories);
   } catch (error) {
@@ -32,6 +33,15 @@ router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respons
     const category = await prisma.category.create({
       data: { name }
     });
+
+    await logActivity({
+      entityType: 'Category',
+      entityId: String(category.id),
+      action: 'CREATE',
+      description: `Created category ${category.name}`,
+      userId: (req as any).user?.id
+    });
+
     res.status(201).json(category);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create category' });
@@ -45,10 +55,20 @@ router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respo
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
+    const numId = parseInt(id, 10);
     const category = await prisma.category.update({
-      where: { id },
+      where: { id: isNaN(numId) ? (id as any) : numId },
       data: { name }
     });
+
+    await logActivity({
+      entityType: 'Category',
+      entityId: String(category.id),
+      action: 'UPDATE',
+      description: `Updated category ${category.name}`,
+      userId: (req as any).user?.id
+    });
+
     res.json(category);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update category' });
@@ -59,9 +79,19 @@ router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respo
 router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const numId = parseInt(id, 10);
     await prisma.category.delete({
-      where: { id }
+      where: { id: isNaN(numId) ? (id as any) : numId }
     });
+
+    await logActivity({
+      entityType: 'Category',
+      entityId: String(id),
+      action: 'DELETE',
+      description: `Deleted category`,
+      userId: (req as any).user?.id
+    });
+
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete category' });

@@ -111,7 +111,8 @@ router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => 
 // Update a client
 router.put('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const { companyName, email, phone, gstNumber, imageUrl, attachments } = req.body;
 
     const client = await prisma.client.update({

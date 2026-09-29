@@ -14,6 +14,7 @@ enum Role {
   SALES_REP
 }
 
+
 enum Shift {
   DAY
   NIGHT
@@ -34,16 +35,24 @@ enum RollStatus {
 }
 
 model User {
-  id               String              @id @default(uuid())
-  username         String              @unique
-  password         String
-  role             Role
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  jobs             ProductionJob[]
-  clients          Client[]
+  id                String              @id @default(uuid())
+  employeeId        String?
+  username          String              @unique
+  fullName          String?
+  firstName         String?
+  lastName          String?
+  email             String?
+  contactNumber     String?
+  password          String
+  role              String              @default("Admin")
+  status            String              @default("Active")
+  isBlock           Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  jobs              ProductionJob[]
+  clients           Client[]
   outlookConnection OutlookConnection?
-  activities       ActivityLog[]
+  activities        ActivityLog[]
 }
 
 model ProductionJob {
@@ -90,7 +99,7 @@ enum Status {
 }
 
 model Supplier {
-  id                       String    @id @default(uuid())
+  id                       Int       @id @default(autoincrement())
   name                     String
   contact                  String?
   email                    String?
@@ -128,14 +137,14 @@ model Supplier {
 }
 
 model Category {
-  id         String      @id @default(uuid())
+  id         Int         @id @default(autoincrement())
   name       String
   products   Product[]
   skuMasters SkuMaster[]
 }
 
 model Unit {
-  id       String    @id @default(uuid())
+  id       Int       @id @default(autoincrement())
   name     String
   products Product[]
 }
@@ -150,12 +159,12 @@ model Product {
   min_stock               Int           @default(0)
   location                String?
   status                  Status        @default(Active)
-  categoryId              String?
+  categoryId              Int?
   category                Category?     @relation(fields: [categoryId], references: [id])
-  supplierId              String?
+  supplierId              Int?
   supplier                Supplier?     @relation(fields: [supplierId], references: [id])
   invoiceDate             DateTime?
-  unitId                  String?
+  unitId                  Int?
   unit                    Unit?         @relation(fields: [unitId], references: [id])
 
   // ERPNext Item Master Extended Fields
@@ -179,6 +188,7 @@ model Product {
   assignedTo              String?
   tags                    String?
   imageUrl                String?
+  attachments             Json?
   incomeAccount           String?
   expenseAccount          String?
   hsnCode                 String?
@@ -225,10 +235,10 @@ model Invoice {
   payments      Payment[]
   grns          Grn[]
 
-  clientId String?
+  clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
 
-  supplierId String?
+  supplierId Int?
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
 
   createdAt DateTime @default(now())
@@ -250,7 +260,7 @@ model SkuMaster {
   id         String    @id @default(uuid())
   name       String
   sku        String    @unique
-  categoryId String?
+  categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id])
 }
 
@@ -293,7 +303,7 @@ model ActivityLog {
 }
 
 model Client {
-  id               String    @id @default(uuid())
+  id               Int       @id @default(autoincrement())
   companyName      String
   email            String?
   phone            String?
@@ -311,7 +321,7 @@ model Client {
 
 model Inquiry {
   id           String   @id @default(uuid())
-  clientId     String
+  clientId     Int
   client       Client   @relation(fields: [clientId], references: [id])
   sizeInTons   Float
   quotedPrice  Float
@@ -360,10 +370,10 @@ model Payment {
   amount        Decimal     @db.Decimal(10, 2)
   description   String?
   
-  clientId      String?
+  clientId      Int?
   client        Client?     @relation(fields: [clientId], references: [id])
   
-  supplierId    String?
+  supplierId    Int?
   supplier      Supplier?   @relation(fields: [supplierId], references: [id])
   
   invoiceId     String?
@@ -378,7 +388,7 @@ model Grn {
   grnNumber    String    @unique
   invoiceId    String
   invoice      Invoice   @relation(fields: [invoiceId], references: [id])
-  supplierId   String?
+  supplierId   Int?
   supplier     Supplier? @relation(fields: [supplierId], references: [id])
   receivedDate DateTime  @default(now())
   status       GrnStatus @default(PENDING_INSPECTION)

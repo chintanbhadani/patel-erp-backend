@@ -23,6 +23,8 @@ import grnRouter from './routes/grn.routes';
 import uploadRouter from './routes/upload.routes';
 import materialRequestRouter from './routes/materialRequest.routes';
 import purchaseOrderRouter from './routes/purchaseOrder.routes';
+import userRouter from './routes/user.routes';
+import roleRouter from './routes/role.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -53,6 +55,8 @@ app.get('/api/financials', authorizeRole('PLANT_ADMIN'), (req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/users', userRouter);
+app.use('/api/roles', roleRouter);
 app.use('/api/jobs', jobsRouter);
 app.use('/api/inventory', inventoryRouter); // Plant Inventory (Raw Materials)
 app.use('/api/products', productRouter); // Product Inventory (Aura ERP)

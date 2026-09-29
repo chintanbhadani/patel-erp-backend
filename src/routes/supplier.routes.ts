@@ -33,7 +33,8 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
 // GET supplier by ID
 router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const supplier = await prisma.supplier.findUnique({
       where: { id }
     });
@@ -94,7 +95,8 @@ router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respons
 // PUT update supplier
 router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const data = req.body;
     if (!data.name) return res.status(400).json({ error: 'Supplier Name is required' });
 
@@ -141,7 +143,8 @@ router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respo
 // DELETE supplier
 router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     await prisma.supplier.delete({
       where: { id }
     });
