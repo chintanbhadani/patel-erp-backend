@@ -139,6 +139,7 @@ model Supplier {
 model Category {
   id         Int         @id @default(autoincrement())
   name       String
+  disabled   Boolean     @default(false)
   products   Product[]
   skuMasters SkuMaster[]
 }
@@ -146,6 +147,7 @@ model Category {
 model Unit {
   id       Int       @id @default(autoincrement())
   name     String
+  disabled Boolean   @default(false)
   products Product[]
 }
 
@@ -303,20 +305,47 @@ model ActivityLog {
 }
 
 model Client {
-  id               Int       @id @default(autoincrement())
-  companyName      String
-  email            String?
-  phone            String?
-  gstNumber        String?   @unique
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  assignedRepId    String?
-  assignedRep      User?     @relation(fields: [assignedRepId], references: [id])
-  imageUrl         String?
-  attachments      Json?
-  inquiries        Inquiry[]
-  invoices         Invoice[]
-  payments         Payment[]
+  id                        Int       @id @default(autoincrement())
+  companyName               String
+  customerType              String?   @default("Company")
+  customerGroup             String?   @default("Commercial")
+  territory                 String?   @default("India")
+  fromLead                  String?
+  fromOpportunity           String?
+  fromProspect              String?
+  accountManager            String?
+  isAuthOtpApplied          Boolean   @default(false)
+  defaultPriceList          String?   @default("Standard Selling")
+  billingCurrency           String?   @default("INR")
+  defaultCompanyBankAccount String?
+  email                     String?
+  phone                     String?
+  contactPersonName         String?
+  taxId                     String?
+  gstNumber                 String?
+  vrnNo                     String?
+  taxCategory               String?   @default("Standard Rate")
+  receivableAccount         String?   @default("Debtors - PS")
+  paymentTerms              String?   @default("Net 30")
+  creditLimit               Float?    @default(0)
+  disabled                  Boolean   @default(false)
+  assignedTo                String?
+  tags                      String?
+  address                   String?
+  city                      String?
+  state                     String?
+  postalCode                String?
+  country                   String?   @default("India")
+  imageUrl                  String?
+  attachments               Json?
+  addresses                 Json?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  assignedRepId             String?
+  assignedRep               User?     @relation(fields: [assignedRepId], references: [id])
+  inquiries                 Inquiry[]
+  invoices                  Invoice[]
+  payments                  Payment[]
 }
 
 model Inquiry {

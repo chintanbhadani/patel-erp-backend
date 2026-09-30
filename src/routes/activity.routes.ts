@@ -41,7 +41,8 @@ router.get('/', authenticateToken, async (req, res) => {
             username: true,
             fullName: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            email: true
           }
         }
       },
@@ -91,7 +92,8 @@ router.post('/', authenticateToken, async (req, res) => {
             username: true,
             fullName: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            email: true
           }
         }
       }

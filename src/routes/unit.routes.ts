@@ -27,11 +27,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
 // POST new unit
 router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
+    const { name, disabled } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     const unit = await prisma.unit.create({
-      data: { name }
+      data: {
+        name,
+        disabled: disabled !== undefined ? Boolean(disabled) : false
+      }
     });
 
     await logActivity({
@@ -53,12 +56,14 @@ router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respo
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const { name, disabled } = req.body;
 
     const unit = await prisma.unit.update({
       where: { id },
-      data: { name }
+      data: {
+        name: name !== undefined ? name : undefined,
+        disabled: disabled !== undefined ? Boolean(disabled) : undefined
+      }
     });
 
     await logActivity({

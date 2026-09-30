@@ -27,11 +27,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
 // POST new category
 router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
+    const { name, disabled } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     const category = await prisma.category.create({
-      data: { name }
+      data: {
+        name,
+        disabled: disabled !== undefined ? Boolean(disabled) : false
+      }
     });
 
     await logActivity({
@@ -52,13 +55,15 @@ router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respons
 router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const { name, disabled } = req.body;
 
     const numId = parseInt(id, 10);
     const category = await prisma.category.update({
       where: { id: isNaN(numId) ? (id as any) : numId },
-      data: { name }
+      data: {
+        name: name !== undefined ? name : undefined,
+        disabled: disabled !== undefined ? Boolean(disabled) : undefined
+      }
     });
 
     await logActivity({

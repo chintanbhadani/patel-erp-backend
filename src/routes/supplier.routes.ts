@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorizeRole } from '../middleware/auth';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -78,13 +79,22 @@ router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respons
         paymentTerms: data.paymentTerms || null,
         creditLimit: data.creditLimit !== undefined ? parseFloat(data.creditLimit) : 0,
         disabled: Boolean(data.disabled),
-        assignedTo: data.assignedTo || 'Julius Daffa',
+        assignedTo: data.assignedTo || 'Administrator',
         tags: data.tags || null,
         imageUrl: data.imageUrl || null,
         attachments: data.attachments || [],
-        kycDocs: data.kycDocs || []
+        kycDocs: data.kycDocs || data.kycDocuments || []
       }
     });
+
+    await logActivity({
+      entityType: 'Supplier',
+      entityId: String(supplier.id),
+      action: 'CREATE',
+      description: `Created supplier ${supplier.name}`,
+      userId: (req as any).user?.id
+    });
+
     res.status(201).json({ message: 'Supplier created successfully', ...supplier });
   } catch (error: any) {
     console.error('Failed to create supplier:', error);
@@ -130,9 +140,18 @@ router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Respo
         tags: data.tags,
         imageUrl: data.imageUrl !== undefined ? data.imageUrl : undefined,
         attachments: data.attachments !== undefined ? data.attachments : undefined,
-        kycDocs: data.kycDocs !== undefined ? data.kycDocs : undefined
+        kycDocs: data.kycDocs !== undefined ? data.kycDocs : (data.kycDocuments !== undefined ? data.kycDocuments : undefined)
       }
     });
+
+    await logActivity({
+      entityType: 'Supplier',
+      entityId: String(supplier.id),
+      action: 'UPDATE',
+      description: `Updated supplier ${supplier.name}`,
+      userId: (req as any).user?.id
+    });
+
     res.status(200).json({ message: 'Supplier updated successfully', ...supplier });
   } catch (error: any) {
     console.error('Failed to update supplier:', error);
@@ -148,6 +167,15 @@ router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Re
     await prisma.supplier.delete({
       where: { id }
     });
+
+    await logActivity({
+      entityType: 'Supplier',
+      entityId: String(id),
+      action: 'DELETE',
+      description: `Deleted supplier`,
+      userId: (req as any).user?.id
+    });
+
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete supplier' });
