@@ -6,7 +6,7 @@ import { logActivity } from '../services/activityLogger';
 const router = Router();
 const prisma = new PrismaClient();
 
-// GET all categories
+// GET all SubPartOf entries
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
     const { search } = req.query;
@@ -14,109 +14,109 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
     if (search && typeof search === 'string' && search.trim()) {
       where.name = { contains: search.trim(), mode: 'insensitive' };
     }
-    const categories = await prisma.category.findMany({
+    const items = await prisma.subPartOf.findMany({
       where,
       orderBy: { id: 'asc' }
     });
-    res.json(categories);
+    res.json(items);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch categories' });
+    res.status(500).json({ error: 'Failed to fetch Sub Part Of entries' });
   }
 });
 
-// GET category by ID
+// GET SubPartOf by ID
 router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const numId = parseInt(id, 10);
-    const category = await prisma.category.findUnique({
+    const item = await prisma.subPartOf.findUnique({
       where: { id: isNaN(numId) ? (id as any) : numId }
     });
-    if (!category) {
-      return res.status(404).json({ error: 'Category not found' });
+    if (!item) {
+      return res.status(404).json({ error: 'Sub Part Of entry not found' });
     }
-    res.json(category);
+    res.json(item);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch category details' });
+    res.status(500).json({ error: 'Failed to fetch Sub Part Of details' });
   }
 });
 
-// POST new category
+// POST new SubPartOf
 router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
     const { name, disabled } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
-    const category = await prisma.category.create({
+    const item = await prisma.subPartOf.create({
       data: {
-        name,
+        name: name.trim(),
         disabled: disabled !== undefined ? Boolean(disabled) : false
       }
     });
 
     await logActivity({
-      entityType: 'Category',
-      entityId: String(category.id),
+      entityType: 'SubPartOf',
+      entityId: String(item.id),
       action: 'CREATE',
-      description: `Created category ${category.name}`,
+      description: `Created Sub Part Of ${item.name}`,
       userId: (req as any).user?.id
     });
 
-    res.status(201).json(category);
+    res.status(201).json(item);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create category' });
+    res.status(500).json({ error: 'Failed to create Sub Part Of entry' });
   }
 });
 
-// PUT update category
+// PUT update SubPartOf
 router.put('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, disabled } = req.body;
 
     const numId = parseInt(id, 10);
-    const category = await prisma.category.update({
+    const item = await prisma.subPartOf.update({
       where: { id: isNaN(numId) ? (id as any) : numId },
       data: {
-        name: name !== undefined ? name : undefined,
+        name: name !== undefined ? name.trim() : undefined,
         disabled: disabled !== undefined ? Boolean(disabled) : undefined
       }
     });
 
     await logActivity({
-      entityType: 'Category',
-      entityId: String(category.id),
+      entityType: 'SubPartOf',
+      entityId: String(item.id),
       action: 'UPDATE',
-      description: `Updated category ${category.name}`,
+      description: `Updated Sub Part Of ${item.name}`,
       userId: (req as any).user?.id
     });
 
-    res.json(category);
+    res.json(item);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update category' });
+    res.status(500).json({ error: 'Failed to update Sub Part Of entry' });
   }
 });
 
-// DELETE category
+// DELETE SubPartOf
 router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const numId = parseInt(id, 10);
-    await prisma.category.delete({
+    await prisma.subPartOf.delete({
       where: { id: isNaN(numId) ? (id as any) : numId }
     });
 
     await logActivity({
-      entityType: 'Category',
+      entityType: 'SubPartOf',
       entityId: String(id),
       action: 'DELETE',
-      description: `Deleted category`,
+      description: `Deleted Sub Part Of`,
       userId: (req as any).user?.id
     });
 
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete category' });
+    res.status(500).json({ error: 'Failed to delete Sub Part Of entry' });
   }
 });
 

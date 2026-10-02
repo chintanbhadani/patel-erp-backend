@@ -151,6 +151,22 @@ model Unit {
   products Product[]
 }
 
+model PartOf {
+  id        Int      @id @default(autoincrement())
+  name      String
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model SubPartOf {
+  id        Int      @id @default(autoincrement())
+  name      String
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
 model Product {
   id                      String        @id @default(uuid())
   sku                     String        @unique

@@ -25,6 +25,8 @@ import materialRequestRouter from './routes/materialRequest.routes';
 import purchaseOrderRouter from './routes/purchaseOrder.routes';
 import userRouter from './routes/user.routes';
 import roleRouter from './routes/role.routes';
+import partOfRouter from './routes/partOf.routes';
+import subPartOfRouter from './routes/subPartOf.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -65,6 +67,8 @@ app.use('/api/outlook', outlookRouter);
 app.use('/api/expenses', expenseRouter);
 app.use('/api/invoices', invoiceRouter);
 app.use('/api/categories', categoryRouter);
+app.use('/api/part-of', partOfRouter);
+app.use('/api/sub-part-of', subPartOfRouter);
 app.use('/api/suppliers', supplierRouter);
 app.use('/api/units', unitRouter);
 app.use('/api/skuMaster', skuMasterRouter);

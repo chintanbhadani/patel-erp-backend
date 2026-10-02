@@ -1,9 +1,44 @@
 import { Router, Request, Response } from 'express';
+import { logActivity, createFieldDiffDescriptionAsync } from '../services/activityLogger';
 
 const router = Router();
 
 // In-memory Purchase Order store initialized with default sample data
 export let purchaseOrders: any[] = [
+  {
+    id: 'PO-2026-09-00004',
+    series: 'NCL-.2026.-.09.-',
+    status: 'Draft',
+    approvalStatus: 'Draft',
+    company: 'PATEL STRAP INDUSTRIES LTD',
+    supplier: 'Taparia',
+    transactionDate: new Date().toISOString().split('T')[0],
+    requiredByDate: new Date().toISOString().split('T')[0],
+    paymentTerms: 'Cash',
+    purchaseType: 'Local',
+    gstin: '24ETSPB1142M1ZL',
+    tin: '24ETSPB1142M1ZL',
+    vrn: '40-018878-T',
+    pfiNo: '',
+    user: 'admin',
+    contact: '+255...',
+    email: 'supplier@example.com',
+    setWarehouse: 'Main Store - PSL',
+    currency: 'INR',
+    priceList: 'Standard Buying',
+    applyTaxWithholding: false,
+    isSubcontracted: false,
+    assignedTo: 'admin',
+    createdBy: 'admin',
+    tags: 'PURCHASE,BUYING',
+    attachments: [
+      { name: 'PatelInvoice.pdf', url: '#' }
+    ],
+    updatedAt: new Date().toISOString(),
+    items: [
+      { id: '1', itemCode: 'NGTL047: SHANK DRILL BIT', requiredByDate: new Date().toISOString().split('T')[0], itemGroup: 'TOOLS', quantity: 100, uom: 'Pcs', rate: 40254, receivedQty: 0, amount: 4025400 }
+    ]
+  },
   {
     id: 'PO-2026-09-00008',
     series: 'NCL-.2026.-.09.-',
@@ -94,7 +129,7 @@ export let purchaseOrders: any[] = [
   }
 ];
 
-let nextNumber = 3;
+let nextNumber = 9;
 
 // GET all purchase orders
 router.get('/', (req: Request, res: Response) => {
@@ -120,9 +155,43 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const po = purchaseOrders.find(p => p.id === id);
+    let po = purchaseOrders.find(p => p.id === id);
     if (!po) {
-      return res.status(404).json({ error: 'Purchase Order not found' });
+      // Auto-create missing PO record so frontend can edit & save seamlessly
+      po = {
+        id,
+        series: 'NCL-.2026.-.09.-',
+        status: 'Draft',
+        approvalStatus: 'Draft',
+        company: 'PATEL STRAP INDUSTRIES LTD',
+        supplier: '',
+        transactionDate: new Date().toISOString().split('T')[0],
+        requiredByDate: new Date().toISOString().split('T')[0],
+        paymentTerms: '',
+        purchaseType: '',
+        gstin: '',
+        tin: '',
+        vrn: '',
+        pfiNo: '',
+        user: 'admin',
+        contact: '',
+        email: '',
+        setWarehouse: 'Main Store - PSL',
+        currency: 'INR',
+        priceList: 'Standard Buying',
+        applyTaxWithholding: false,
+        isSubcontracted: false,
+        assignedTo: 'admin',
+        createdBy: 'admin',
+        tags: 'PURCHASE,BUYING',
+        attachments: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        items: [
+          { id: '1', itemCode: '', requiredByDate: new Date().toISOString().split('T')[0], itemGroup: 'GENERAL', quantity: 1, uom: 'Pcs', rate: 0, receivedQty: 0, amount: 0 }
+        ]
+      };
+      purchaseOrders.unshift(po);
     }
     res.json(po);
   } catch (error) {
@@ -148,6 +217,7 @@ router.post('/', (req: Request, res: Response) => {
       requiredByDate: data.requiredByDate || new Date().toISOString().split('T')[0],
       paymentTerms: data.paymentTerms || 'Credit',
       purchaseType: data.purchaseType || 'Local',
+      gstin: data.gstin || '',
       tin: data.tin || '',
       vrn: data.vrn || '',
       pfiNo: data.pfiNo || '',
@@ -160,6 +230,8 @@ router.post('/', (req: Request, res: Response) => {
       applyTaxWithholding: data.applyTaxWithholding || false,
       isSubcontracted: data.isSubcontracted || false,
       assignedTo: data.assignedTo || 'Administrator',
+      tags: data.tags || '',
+      attachments: data.attachments || [],
       createdBy: data.createdBy || 'Administrator',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -174,21 +246,78 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT update purchase order
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const data = req.body;
 
     const index = purchaseOrders.findIndex(p => p.id === id);
     if (index === -1) {
-      return res.status(404).json({ error: 'Purchase Order not found' });
+      // Upsert: Create entry if not found
+      const newPO = {
+        id,
+        series: data.series || 'NCL-.2026.-.09.-',
+        status: data.status || 'Draft',
+        approvalStatus: data.approvalStatus || 'Draft',
+        company: data.company || 'PATEL STRAP INDUSTRIES LTD',
+        supplier: data.supplier || '',
+        transactionDate: data.transactionDate || new Date().toISOString().split('T')[0],
+        requiredByDate: data.requiredByDate || new Date().toISOString().split('T')[0],
+        paymentTerms: data.paymentTerms || 'Credit',
+        purchaseType: data.purchaseType || 'Local',
+        gstin: data.gstin || '',
+        tin: data.tin || '',
+        vrn: data.vrn || '',
+        pfiNo: data.pfiNo || '',
+        user: data.user || 'Administrator',
+        contact: data.contact || '',
+        email: data.email || '',
+        setWarehouse: data.setWarehouse || 'Main Store - PSL',
+        currency: data.currency || 'INR',
+        priceList: data.priceList || 'Standard Buying',
+        applyTaxWithholding: data.applyTaxWithholding || false,
+        isSubcontracted: data.isSubcontracted || false,
+        assignedTo: data.assignedTo || 'Administrator',
+        tags: data.tags || '',
+        attachments: data.attachments || [],
+        createdBy: data.createdBy || 'Administrator',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        items: data.items || [],
+        ...data
+      };
+      purchaseOrders.unshift(newPO);
+      return res.json(newPO);
     }
 
-    purchaseOrders[index] = {
-      ...purchaseOrders[index],
+    const oldPO = JSON.parse(JSON.stringify(purchaseOrders[index]));
+    const updatedPO = {
+      ...oldPO,
       ...data,
       updatedAt: new Date().toISOString()
     };
+    purchaseOrders[index] = updatedPO;
+
+    // Generate detailed diff description
+    const fieldDiff = await createFieldDiffDescriptionAsync(oldPO, updatedPO);
+    let actionDescription = fieldDiff;
+    if (oldPO.status !== updatedPO.status) {
+      if (updatedPO.status === 'Submitted') {
+        actionDescription = fieldDiff !== 'updated record' ? `submitted purchase order (${fieldDiff})` : 'submitted purchase order';
+      } else if (updatedPO.status === 'Rejected') {
+        actionDescription = fieldDiff !== 'updated record' ? `rejected purchase order (${fieldDiff})` : 'rejected purchase order';
+      }
+    }
+
+    // Log Activity in DB
+    await logActivity({
+      entityType: 'PurchaseOrder',
+      entityId: id,
+      action: updatedPO.status === 'Submitted' ? 'SUBMIT' : 'UPDATE',
+      description: actionDescription,
+      userId: (req as any).user?.id || (data as any).userId,
+      metadata: { userName: data.user || data.createdBy || 'admin' }
+    }).catch(err => console.error('Error logging PO update activity:', err));
 
     res.json(purchaseOrders[index]);
   } catch (error) {

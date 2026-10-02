@@ -24,6 +24,23 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
   }
 });
 
+// GET unit by ID
+router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const unit = await prisma.unit.findUnique({
+      where: { id }
+    });
+    if (!unit) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+    res.json(unit);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch unit details' });
+  }
+});
+
 // POST new unit
 router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
   try {

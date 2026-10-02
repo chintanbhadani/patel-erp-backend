@@ -224,3 +224,27 @@ export const categories: CategoryMaster[] = [
   { id: 5, name: 'DRILLING MACHINE' },
   { id: 6, name: 'WORKSHOP' }
 ];
+
+export interface PartOfMaster {
+  id: number;
+  name: string;
+}
+
+export interface SubPartOfMaster {
+  id: number;
+  name: string;
+}
+
+export const partOfs: PartOfMaster[] = [
+  { id: 1, name: 'CONSUMABLE' },
+  { id: 2, name: 'RAW MATERIAL' },
+  { id: 3, name: 'FINISHED GOODS' },
+  { id: 4, name: 'SPARE PARTS' }
+];
+
+export const subPartOfs: SubPartOfMaster[] = [
+  { id: 1, name: 'WORKSHOP' },
+  { id: 2, name: 'LINE A' },
+  { id: 3, name: 'MAIN STORE' }
+];
+
