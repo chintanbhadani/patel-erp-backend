@@ -14,7 +14,6 @@ enum Role {
   SALES_REP
 }
 
-
 enum Shift {
   DAY
   NIGHT
@@ -35,24 +34,27 @@ enum RollStatus {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  employeeId        String?
-  username          String              @unique
-  fullName          String?
-  firstName         String?
-  lastName          String?
-  email             String?
-  contactNumber     String?
-  password          String
-  role              String              @default("Admin")
-  status            String              @default("Active")
-  isBlock           Boolean             @default(false)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  jobs              ProductionJob[]
-  clients           Client[]
-  outlookConnection OutlookConnection?
-  activities        ActivityLog[]
+  id                      String            @id @default(uuid())
+  employeeId              String?
+  username                String            @unique
+  fullName                String?
+  firstName               String?
+  lastName                String?
+  email                   String?
+  contactNumber           String?
+  password                String
+  role                    String            @default("Admin")
+  status                  String            @default("Active")
+  isBlock                 Boolean           @default(false)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  jobs                    ProductionJob[]
+  clients                 Client[]
+  outlookConnection       OutlookConnection?
+  activities              ActivityLog[]
+  createdMaterialRequests MaterialRequest[] @relation("MaterialRequestCreatedUser")
+  purchaseOrders          PurchaseOrder[]   @relation("PurchaseOrderUser")
+  createdPurchaseOrders   PurchaseOrder[]   @relation("PurchaseOrderCreatedUser")
 }
 
 model ProductionJob {
@@ -87,7 +89,7 @@ model QCLog {
   tensileStrength Float
   splitTest       Float
   elongation      Float
-  gpm             Float         // Grams Per Meter
+  gpm             Float // Grams Per Meter
   jobId           String
   job             ProductionJob @relation(fields: [jobId], references: [id])
   createdAt       DateTime      @default(now())
@@ -99,19 +101,19 @@ enum Status {
 }
 
 model Supplier {
-  id                       Int       @id @default(autoincrement())
+  id                       Int             @id @default(autoincrement())
   name                     String
   contact                  String?
   email                    String?
-  supplierGroup            String?   @default("All Supplier Groups")
-  country                  String?   @default("India")
-  supplierType             String?   @default("Company")
-  isTransporter            Boolean   @default(false)
+  supplierGroup            String?         @default("All Supplier Groups")
+  country                  String?         @default("India")
+  supplierType             String?         @default("Company")
+  isTransporter            Boolean         @default(false)
   contactPersonName        String?
-  billingCurrency          String?   @default("INR")
-  priceList                String?   @default("Standard Buying")
+  billingCurrency          String?         @default("INR")
+  priceList                String?         @default("Standard Buying")
   bankAccount              String?
-  trackExchangeDifferences Boolean   @default(true)
+  trackExchangeDifferences Boolean         @default(true)
   taxId                    String?
   vrnNo                    String?
   address                  String?
@@ -119,21 +121,22 @@ model Supplier {
   state                    String?
   postalCode               String?
   website                  String?
-  payableAccount           String?   @default("Creditors - PS")
+  payableAccount           String?         @default("Creditors - PS")
   paymentTerms             String?
-  creditLimit              Float?    @default(0)
-  disabled                 Boolean   @default(false)
-  assignedTo               String?   @default("Julius Daffa")
+  creditLimit              Float?          @default(0)
+  disabled                 Boolean         @default(false)
+  assignedTo               String?         @default("Julius Daffa")
   tags                     String?
   imageUrl                 String?
   attachments              Json?
   kycDocs                  Json?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt @default(now())
-  products Product[]
-  invoices Invoice[]
-  payments Payment[]
-  grns     Grn[]
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @default(now()) @updatedAt
+  products                 Product[]
+  invoices                 Invoice[]
+  payments                 Payment[]
+  grns                     Grn[]
+  purchaseOrders           PurchaseOrder[]
 }
 
 model Category {
@@ -149,6 +152,29 @@ model Unit {
   name     String
   disabled Boolean   @default(false)
   products Product[]
+}
+
+model Warehouse {
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  code             String?           @unique
+  address          String?
+  disabled         Boolean           @default(false)
+  materialRequests MaterialRequest[]
+  purchaseOrders   PurchaseOrder[]
+  grns             Grn[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+}
+
+model Department {
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  code             String?           @unique
+  disabled         Boolean           @default(false)
+  materialRequests MaterialRequest[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
 }
 
 model PartOf {
@@ -168,55 +194,57 @@ model SubPartOf {
 }
 
 model Product {
-  id                      String        @id @default(uuid())
-  sku                     String        @unique
-  name                    String
-  quantity                Int           @default(0)
-  cost_price              Decimal       @db.Decimal(10, 2)
-  selling_price           Decimal       @db.Decimal(10, 2)
-  min_stock               Int           @default(0)
-  location                String?
-  status                  Status        @default(Active)
-  categoryId              Int?
-  category                Category?     @relation(fields: [categoryId], references: [id])
-  supplierId              Int?
-  supplier                Supplier?     @relation(fields: [supplierId], references: [id])
-  invoiceDate             DateTime?
-  unitId                  Int?
-  unit                    Unit?         @relation(fields: [unitId], references: [id])
+  id                     String      @id @default(uuid())
+  sku                    String      @unique
+  name                   String
+  quantity               Int         @default(0)
+  cost_price             Decimal     @db.Decimal(10, 2)
+  selling_price          Decimal     @db.Decimal(10, 2)
+  min_stock              Int         @default(0)
+  location               String?
+  status                 Status      @default(Active)
+  categoryId             Int?
+  category               Category?   @relation(fields: [categoryId], references: [id])
+  supplierId             Int?
+  supplier               Supplier?   @relation(fields: [supplierId], references: [id])
+  invoiceDate            DateTime?
+  unitId                 Int?
+  unit                   Unit?       @relation(fields: [unitId], references: [id])
 
   // ERPNext Item Master Extended Fields
-  company                 String?
-  partOf                  String?
-  subPartOf               String?
-  tansadNo                String?
-  withholdingTaxPurchase  Float?        @default(0)
-  withholdingTaxSales     Float?        @default(0)
-  activityType            String?
-  disabled                Boolean       @default(false)
-  allowAlternativeItem    Boolean       @default(false)
-  maintainStock           Boolean       @default(true)
-  excisableItem           Boolean       @default(false)
-  hasVariants             Boolean       @default(false)
-  includeInManufacturing  Boolean       @default(true)
-  isFixedAsset            Boolean       @default(false)
-  valuationRate           Decimal?      @default(0) @db.Decimal(10, 2)
-  overDeliveryAllowance   Float?        @default(0)
-  overBillingAllowance    Float?        @default(0)
-  assignedTo              String?
-  tags                    String?
-  imageUrl                String?
-  attachments             Json?
-  incomeAccount           String?
-  expenseAccount          String?
-  hsnCode                 String?
-  taxRate                 Float?        @default(18)
+  company                String?
+  partOf                 String?
+  subPartOf              String?
+  tansadNo               String?
+  withholdingTaxPurchase Float?      @default(0)
+  withholdingTaxSales    Float?      @default(0)
+  activityType           String?
+  disabled               Boolean     @default(false)
+  allowAlternativeItem   Boolean     @default(false)
+  maintainStock          Boolean     @default(true)
+  excisableItem          Boolean     @default(false)
+  hasVariants            Boolean     @default(false)
+  includeInManufacturing Boolean     @default(true)
+  isFixedAsset           Boolean     @default(false)
+  valuationRate          Decimal?    @default(0) @db.Decimal(10, 2)
+  overDeliveryAllowance  Float?      @default(0)
+  overBillingAllowance   Float?      @default(0)
+  assignedTo             String?
+  tags                   String?
+  imageUrl               String?
+  attachments            Json?
+  incomeAccount          String?
+  expenseAccount         String?
+  hsnCode                String?
+  taxRate                Float?      @default(18)
 
-  invoiceItems            InvoiceItem[]
-  stockLedgers            StockLedger[]
-  grnItems                GrnItem[]
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  invoiceItems           InvoiceItem[]
+  stockLedgers           StockLedger[]
+  grnItems               GrnItem[]
+  purchaseOrderItems     PurchaseOrderItem[]
+  materialRequestItems   MaterialRequestItem[]
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
 }
 
 enum InvoiceType {
@@ -299,13 +327,13 @@ model ExpenseMaster {
 }
 
 model QualityParameter {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   parameter_name String
   unit           String?
   min_value      Float?
   max_value      Float?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model ActivityLog {
@@ -321,18 +349,18 @@ model ActivityLog {
 }
 
 model Client {
-  id                        Int       @id @default(autoincrement())
+  id                        Int             @id @default(autoincrement())
   companyName               String
-  customerType              String?   @default("Company")
-  customerGroup             String?   @default("Commercial")
-  territory                 String?   @default("India")
+  customerType              String?         @default("Company")
+  customerGroup             String?         @default("Commercial")
+  territory                 String?         @default("India")
   fromLead                  String?
   fromOpportunity           String?
   fromProspect              String?
   accountManager            String?
-  isAuthOtpApplied          Boolean   @default(false)
-  defaultPriceList          String?   @default("Standard Selling")
-  billingCurrency           String?   @default("INR")
+  isAuthOtpApplied          Boolean         @default(false)
+  defaultPriceList          String?         @default("Standard Selling")
+  billingCurrency           String?         @default("INR")
   defaultCompanyBankAccount String?
   email                     String?
   phone                     String?
@@ -340,39 +368,40 @@ model Client {
   taxId                     String?
   gstNumber                 String?
   vrnNo                     String?
-  taxCategory               String?   @default("Standard Rate")
-  receivableAccount         String?   @default("Debtors - PS")
-  paymentTerms              String?   @default("Net 30")
-  creditLimit               Float?    @default(0)
-  disabled                  Boolean   @default(false)
+  taxCategory               String?         @default("Standard Rate")
+  receivableAccount         String?         @default("Debtors - PS")
+  paymentTerms              String?         @default("Net 30")
+  creditLimit               Float?          @default(0)
+  disabled                  Boolean         @default(false)
   assignedTo                String?
   tags                      String?
   address                   String?
   city                      String?
   state                     String?
   postalCode                String?
-  country                   String?   @default("India")
+  country                   String?         @default("India")
   imageUrl                  String?
   attachments               Json?
   addresses                 Json?
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
   assignedRepId             String?
-  assignedRep               User?     @relation(fields: [assignedRepId], references: [id])
+  assignedRep               User?           @relation(fields: [assignedRepId], references: [id])
   inquiries                 Inquiry[]
   invoices                  Invoice[]
   payments                  Payment[]
+  purchaseOrders            PurchaseOrder[]
 }
 
 model Inquiry {
-  id           String   @id @default(uuid())
-  clientId     Int
-  client       Client   @relation(fields: [clientId], references: [id])
-  sizeInTons   Float
-  quotedPrice  Float
-  status       String   @default("OPEN")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  clientId    Int
+  client      Client   @relation(fields: [clientId], references: [id])
+  sizeInTons  Float
+  quotedPrice Float
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model OutlookConnection {
@@ -403,57 +432,181 @@ model StockLedger {
   runningBalance Int
   invoiceId      String?
   invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  grnId          String?
+  grn            Grn?     @relation(fields: [grnId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
 
 model Payment {
-  id            String      @id @default(uuid())
-  date          DateTime    @default(now())
-  paymentType   PaymentType // CASH or BANK
-  direction     String      // "IN" or "OUT"
-  amount        Decimal     @db.Decimal(10, 2)
-  description   String?
-  
-  clientId      Int?
-  client        Client?     @relation(fields: [clientId], references: [id])
-  
-  supplierId    Int?
-  supplier      Supplier?   @relation(fields: [supplierId], references: [id])
-  
-  invoiceId     String?
-  invoice       Invoice?    @relation(fields: [invoiceId], references: [id])
+  id          String      @id @default(uuid())
+  date        DateTime    @default(now())
+  paymentType PaymentType // CASH or BANK
+  direction   String // "IN" or "OUT"
+  amount      Decimal     @db.Decimal(10, 2)
+  description String?
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  supplierId Int?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Grn {
-  id           String    @id @default(uuid())
-  grnNumber    String    @unique
-  invoiceId    String
-  invoice      Invoice   @relation(fields: [invoiceId], references: [id])
-  supplierId   Int?
-  supplier     Supplier? @relation(fields: [supplierId], references: [id])
-  receivedDate DateTime  @default(now())
-  status       GrnStatus @default(PENDING_INSPECTION)
-  notes        String?
-  items        GrnItem[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String         @id @default(uuid())
+  grnNumber         String         @unique
+  invoiceId         String?
+  invoice           Invoice?       @relation(fields: [invoiceId], references: [id])
+  supplierId        Int?
+  supplier          Supplier?      @relation(fields: [supplierId], references: [id])
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  acceptedWarehouse String?        @default("Main Store - PSL")
+  warehouseId       Int?
+  warehouse         Warehouse?     @relation(fields: [warehouseId], references: [id])
+  receivedDate      DateTime       @default(now())
+  status            GrnStatus      @default(PENDING_INSPECTION)
+  notes             String?
+  items             GrnItem[]
+  stockLedgers      StockLedger[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 }
 
 model GrnItem {
-  id               String  @id @default(uuid())
-  grnId            String
-  grn              Grn     @relation(fields: [grnId], references: [id], onDelete: Cascade)
-  productId        String
-  product          Product @relation(fields: [productId], references: [id])
-  orderedQuantity  Int
-  receivedQuantity Int
-  acceptedQuantity Int
-  rejectedQuantity Int     @default(0)
-  unitPrice        Decimal @db.Decimal(10, 2)
-  remarks          String?
+  id                  String             @id @default(uuid())
+  grnId               String
+  grn                 Grn                @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product?           @relation(fields: [productId], references: [id])
+  purchaseOrderItemId String?
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+  orderedQuantity     Int
+  receivedQuantity    Int
+  acceptedQuantity    Int
+  rejectedQuantity    Int                @default(0)
+  unitPrice           Decimal            @db.Decimal(10, 2)
+  remarks             String?
 }
 
+model PurchaseOrder {
+  id                  String              @id @default(uuid())
+  poNumber            String?             @unique
+  series              String?             @default("NCL-.YYYY.-.MM.-")
+  status              String              @default("Draft")
+  approvalStatus      String              @default("Draft")
+  company             String              @default("PATEL STRAP INDUSTRIES LTD")
+  supplier            String?
+  supplierId          Int?
+  supplierObj         Supplier?           @relation(fields: [supplierId], references: [id])
+  clientId            Int?
+  client              Client?             @relation(fields: [clientId], references: [id])
+  materialRequestId   String?
+  materialRequest     MaterialRequest?    @relation(fields: [materialRequestId], references: [id])
+  transactionDate     DateTime            @default(now())
+  requiredByDate      DateTime?
+  paymentTerms        String?
+  purchaseType        String?
+  gstin               String?
+  tin                 String?
+  vrn                 String?
+  pfiNo               String?
+  user                String?
+  userId              String?
+  userObj             User?               @relation("PurchaseOrderUser", fields: [userId], references: [id])
+  createdById         String?
+  createdUser         User?               @relation("PurchaseOrderCreatedUser", fields: [createdById], references: [id])
+  contact             String?
+  email               String?
+  setWarehouse        String?             @default("Main Store - PSL")
+  warehouseId         Int?
+  warehouse           Warehouse?          @relation(fields: [warehouseId], references: [id])
+  currency            String?             @default("INR")
+  priceList           String?             @default("Standard Buying")
+  applyTaxWithholding Boolean             @default(false)
+  isSubcontracted     Boolean             @default(false)
+  assignedTo          String?
+  tags                String?
+  attachments         Json?
+  createdBy           String?
+  items               PurchaseOrderItem[]
+  grns                Grn[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+}
+
+model PurchaseOrderItem {
+  id                    String               @id @default(uuid())
+  purchaseOrderId       String
+  purchaseOrder         PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  itemCode              String
+  productId             String?
+  product               Product?             @relation(fields: [productId], references: [id])
+  materialRequestItemId String?
+  materialRequestItem   MaterialRequestItem? @relation(fields: [materialRequestItemId], references: [id])
+  requiredByDate        DateTime?
+  itemGroup             String?
+  quantity              Float                @default(1)
+  uom                   String               @default("Pcs")
+  rate                  Float                @default(0)
+  receivedQty           Float                @default(0)
+  amount                Float                @default(0)
+  grnItems              GrnItem[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+}
+
+model MaterialRequest {
+  id                  String                @id @default(uuid())
+  materialRequestCode String?               @unique
+  series              String?               @default("PR-.YYYY.-.MM.-")
+  status              String                @default("Draft")
+  approvalStatus      String                @default("Draft")
+  purpose             String?               @default("Purchase")
+  transactionDate     DateTime              @default(now())
+  requiredByDate      DateTime?
+  department          String?
+  departmentId        Int?
+  departmentObj       Department?           @relation(fields: [departmentId], references: [id])
+  requiredFor         String?
+  priceList           String?               @default("Standard Buying")
+  company             String                @default("PATEL STRAP INDUSTRIES LTD")
+  attendBy            String?
+  purchaseType        String?
+  setWarehouse        String?               @default("Main Store - PSL")
+  warehouseId         Int?
+  warehouse           Warehouse?            @relation(fields: [warehouseId], references: [id])
+  assignedTo          String?
+  tags                String?
+  attachments         Json?
+  createdBy           String?
+  createdById         String?
+  createdUser         User?                 @relation("MaterialRequestCreatedUser", fields: [createdById], references: [id])
+  items               MaterialRequestItem[]
+  purchaseOrders      PurchaseOrder[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+}
+
+model MaterialRequestItem {
+  id                 String              @id @default(uuid())
+  materialRequestId  String
+  materialRequest    MaterialRequest     @relation(fields: [materialRequestId], references: [id], onDelete: Cascade)
+  itemCode           String
+  productId          String?
+  product            Product?            @relation(fields: [productId], references: [id])
+  sparePart          String?
+  requiredByDate     DateTime?
+  quantity           Float               @default(1)
+  uom                String              @default("Pcs")
+  purchaseOrderItems PurchaseOrderItem[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}

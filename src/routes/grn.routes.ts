@@ -1,207 +1,336 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient, GrnStatus } from '@prisma/client';
-import { purchaseOrders } from './purchaseOrder.routes';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// In-memory fallback store for GRNs
-let sampleGrns: any[] = [
-  {
-    id: 'GRN-2026-09-00001',
-    grnNumber: 'GRN-2026-09-00001',
-    series: 'NCL-GR-.2026.-.09.-',
-    status: 'ACCEPTED',
-    postingDate: '2026-09-24',
-    postingTime: '10:32:06',
-    supplier: 'AURA INDUSTRIAL CONSUMABLES',
-    supplierDeliveryNote: 'DN-99812',
-    supplierInvoiceNumber: 'INV-2026-99',
-    efdReceipt: 'EFD-9012',
-    company: 'PATEL STRAP INDUSTRIES LTD',
-    applyPutawayRule: false,
-    isReturn: false,
-    defaultHod: 'Stock Manager',
-    payment: 'Pending',
-    acceptedWarehouse: 'Main Store - PSL',
-    scanBarcode: '',
-    purchaseOrderId: 'PO-2026-09-00002',
-    invoiceId: 'INV-2026-09-00001',
-    createdBy: 'System User',
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    totalQuantity: 50,
-    totalTrips: 1,
-    totalAmount: 625000,
-    items: [
-      {
-        id: '1',
-        itemCode: 'NGMD008: AMOXYCLAVE TABLET',
-        uom: 'BOX',
-        acceptedQuantity: 50,
-        rate: 12500,
-        amount: 625000,
-        wbNo: 'WB-102',
-        wbSlipNo: 'SLIP-88',
-        mine: 'Sector 4'
+async function generateNextGrnId(transactionDate?: string): Promise<string> {
+  const now = transactionDate ? new Date(transactionDate) : new Date();
+  const validDate = isNaN(now.getTime()) ? new Date() : now;
+  const yearStr = validDate.getFullYear().toString();
+  const monthStr = (validDate.getMonth() + 1).toString().padStart(2, '0');
+  const prefix = `PS-GR-${yearStr}-${monthStr}-`;
+
+  let maxSeq = 0;
+  try {
+    const dbGrns = await prisma.grn.findMany({
+      where: { grnNumber: { startsWith: prefix } },
+      select: { grnNumber: true }
+    });
+
+    for (const g of dbGrns) {
+      if (g.grnNumber && g.grnNumber.startsWith(prefix)) {
+        const numPart = g.grnNumber.replace(prefix, '');
+        const parsed = parseInt(numPart, 10);
+        if (!isNaN(parsed) && parsed > maxSeq) {
+          maxSeq = parsed;
+        }
       }
-    ],
-    taxes: [
-      { id: '1', type: 'On Net Total', accountHead: 'Input Tax CGST - PS', taxRate: 9, amount: 56250, total: 681250 },
-      { id: '2', type: 'On Net Total', accountHead: 'Input Tax SGST - PS', taxRate: 9, amount: 56250, total: 737500 }
-    ]
-  },
-  {
-    id: 'GRN-2026-09-00002',
-    grnNumber: 'GRN-2026-09-00002',
-    series: 'NCL-GR-.2026.-.09.-',
-    status: 'Draft',
-    postingDate: '2026-09-24',
-    postingTime: '11:15:00',
-    supplier: 'VICTOR SUPPLIERS LTD',
-    supplierDeliveryNote: 'DN-88120',
-    supplierInvoiceNumber: 'INV-2026-104',
-    efdReceipt: 'EFD-9088',
-    company: 'PATEL STRAP INDUSTRIES LTD',
-    applyPutawayRule: false,
-    isReturn: false,
-    defaultHod: 'Plant Admin',
-    payment: 'Pending',
-    acceptedWarehouse: 'Main Store - PSL',
-    scanBarcode: '',
-    purchaseOrderId: 'PO-2026-09-00001',
-    invoiceId: '',
-    createdBy: 'Harsh Thakkar',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    totalQuantity: 100,
-    totalTrips: 1,
-    totalAmount: 4025400,
-    items: [
-      {
-        id: '1',
-        itemCode: 'NGTL047: SHANK DRILL BIT',
-        uom: 'Pcs',
-        acceptedQuantity: 100,
-        rate: 40254,
-        amount: 4025400,
-        wbNo: 'WB-108',
-        wbSlipNo: 'SLIP-95',
-        mine: 'Plant Yard'
-      }
-    ],
-    taxes: []
-  }
-];
+    }
+  } catch (err) {}
 
-let nextGrnNum = 313;
+  const nextSeq = maxSeq + 1;
+  return `${prefix}${nextSeq.toString().padStart(5, '0')}`;
+}
 
-const syncPurchaseOrderReceivedQty = (poId: string) => {
-  if (!poId) return;
-  const po = purchaseOrders.find(p => p.id === poId);
-  if (!po) return;
+function formatGrnResponse(g: any) {
+  if (!g) return null;
+  return {
+    ...g,
+    id: g.grnNumber || g.id,
+    grnNumber: g.grnNumber || g.id,
+    series: g.series || 'PS-GR-.YYYY.-.MM.-',
+    status: g.status || 'Draft',
+    supplier: g.supplier?.name || (typeof g.supplier === 'string' ? g.supplier : '') || '',
+    acceptedWarehouse: g.acceptedWarehouse || 'Main Store - PSL',
+    postingDate: g.receivedDate ? new Date(g.receivedDate).toISOString().split('T')[0] : (g.postingDate || ''),
+    postingTime: g.postingTime || '12:00',
+    totalQuantity: g.items?.reduce((sum: number, i: any) => sum + (Number(i.acceptedQuantity || i.orderedQuantity || i.quantity) || 0), 0) || 0,
+    totalAmount: g.items?.reduce((sum: number, i: any) => sum + ((Number(i.acceptedQuantity || i.orderedQuantity || i.quantity) || 0) * (Number(i.unitPrice || i.rate) || 0)), 0) || 0,
+    items: g.items?.map((it: any) => ({
+      id: it.id,
+      itemCode: it.remarks || (it.product?.sku ? `${it.product.sku}: ${it.product.name}` : it.itemCode || 'ITEM-001'),
+      uom: it.uom || it.product?.unit?.name || 'Pcs',
+      acceptedQuantity: Number(it.acceptedQuantity || it.orderedQuantity || it.quantity || 0),
+      rate: Number(it.unitPrice || it.rate || 0),
+      amount: Number(it.acceptedQuantity || it.orderedQuantity || it.quantity || 0) * Number(it.unitPrice || it.rate || 0)
+    })) || []
+  };
+}
 
-  const linkedGrns = sampleGrns.filter(g => g.purchaseOrderId === poId);
+async function processStockIncrementForGrn(grn: any) {
+  if (!grn) return;
+  const statusUpper = String(grn.status || '').toUpperCase();
+  if (statusUpper !== 'ACCEPTED' && statusUpper !== 'SUBMITTED') return;
 
-  po.items = po.items.map((poItem: any) => {
-    let sumReceived = 0;
-    linkedGrns.forEach(grn => {
-      grn.items?.forEach((gItem: any) => {
-        const poCode = (poItem.itemCode || '').split(':')[0].trim().toLowerCase();
-        const grnCode = (gItem.itemCode || '').split(':')[0].trim().toLowerCase();
-        if (poCode === grnCode || (gItem.itemCode && poItem.itemCode && gItem.itemCode.includes(poItem.itemCode))) {
-          sumReceived += Number(gItem.acceptedQuantity || gItem.quantity || 0);
+  if (!grn.items || !Array.isArray(grn.items)) return;
+
+  for (const item of grn.items) {
+    const rawCode = String(item.itemCode || item.remarks || '').trim();
+    if (!rawCode) continue;
+
+    const qty = Number(item.acceptedQuantity || item.quantity || item.orderedQuantity || 0);
+    if (qty <= 0) continue;
+
+    const parts = rawCode.split(':');
+    const sku = parts[0].trim();
+    const name = parts.length > 1 ? parts.slice(1).join(':').trim() : sku;
+    const rate = Number(item.rate || item.unitPrice || 0);
+    const warehouse = grn.acceptedWarehouse || 'Main Store - PSL';
+
+    try {
+      let product = await prisma.product.findFirst({
+        where: {
+          OR: [
+            { sku: { equals: sku, mode: 'insensitive' } },
+            { name: { equals: name, mode: 'insensitive' } }
+          ]
         }
       });
+
+      if (product) {
+        // Prevent duplicate ledger entry for the same GRN and product
+        const existingLedger = await prisma.stockLedger.findFirst({
+          where: { grnId: grn.id, productId: product.id }
+        });
+        if (existingLedger) {
+          console.log(`Stock ledger already exists for GRN ${grn.id} and Product ${product.id}, skipping duplicate creation.`);
+          continue;
+        }
+
+        const newQty = Number(product.quantity || 0) + qty;
+        await prisma.product.update({
+          where: { id: product.id },
+          data: {
+            quantity: newQty,
+            location: product.location || warehouse
+          }
+        });
+
+        await prisma.stockLedger.create({
+          data: {
+            productId: product.id,
+            grnId: grn.id,
+            date: new Date(grn.receivedDate || grn.postingDate || Date.now()),
+            type: 'GRN_RECEIPT',
+            quantityChange: qty,
+            runningBalance: newQty
+          }
+        }).catch(e => console.error('Failed to create stockLedger:', e));
+      } else {
+        const category = await prisma.category.findFirst({ where: { name: { contains: 'SCREW', mode: 'insensitive' } } })
+          || await prisma.category.findFirst();
+
+        const createdProduct = await prisma.product.create({
+          data: {
+            sku: sku,
+            name: name,
+            quantity: qty,
+            cost_price: rate,
+            selling_price: rate,
+            location: warehouse,
+            status: 'Active',
+            categoryId: category?.id || null,
+            partOf: 'RAW MATERIAL',
+            subPartOf: 'WORKSHOP'
+          }
+        });
+
+        try {
+          await prisma.skuMaster.upsert({
+            where: { sku: createdProduct.sku },
+            update: { name: createdProduct.name, categoryId: createdProduct.categoryId },
+            create: { sku: createdProduct.sku, name: createdProduct.name, categoryId: createdProduct.categoryId }
+          });
+        } catch (e) {}
+
+        await prisma.stockLedger.create({
+          data: {
+            productId: createdProduct.id,
+            grnId: grn.id,
+            date: new Date(grn.receivedDate || grn.postingDate || Date.now()),
+            type: 'GRN_RECEIPT',
+            quantityChange: qty,
+            runningBalance: qty
+          }
+        }).catch(e => console.error('Failed to create stockLedger:', e));
+      }
+    } catch (err) {
+      console.error(`Error incrementing stock for ${sku}:`, err);
+    }
+  }
+}
+
+async function saveGrnToDatabase(data: any) {
+  const grnId = data.grnNumber || data.id;
+  if (!grnId) return null;
+
+  let grnStatus: GrnStatus = GrnStatus.DRAFT;
+  const statusUpper = String(data.status || '').toUpperCase();
+  if (statusUpper === 'ACCEPTED') grnStatus = GrnStatus.ACCEPTED;
+  else if (statusUpper === 'REJECTED') grnStatus = GrnStatus.REJECTED;
+  else if (statusUpper === 'PENDING_INSPECTION' || statusUpper === 'PENDING') grnStatus = GrnStatus.PENDING_INSPECTION;
+
+  let supplierId: number | null = null;
+  if (data.supplier) {
+    const suppName = typeof data.supplier === 'string' ? data.supplier : (data.supplier.name || data.supplier.companyName);
+    if (suppName) {
+      let supp = await prisma.supplier.findFirst({ where: { name: { equals: suppName.trim(), mode: 'insensitive' } } });
+      if (!supp) {
+        supp = await prisma.supplier.create({ data: { name: suppName.trim() } }).catch(() => null);
+      }
+      if (supp) supplierId = supp.id;
+    }
+  }
+
+  let purchaseOrderId: string | null = null;
+  if (data.purchaseOrderId) {
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { OR: [{ id: data.purchaseOrderId }, { poNumber: data.purchaseOrderId }] }
     });
-    return {
-      ...poItem,
-      receivedQty: sumReceived
-    };
+    if (po) purchaseOrderId = po.id;
+  }
+
+  const existing = await prisma.grn.findFirst({
+    where: { OR: [{ id: grnId }, { grnNumber: grnId }] }
   });
 
-  const totalOrdered = po.items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
-  const totalReceived = po.items.reduce((s: number, i: any) => s + (Number(i.receivedQty) || 0), 0);
+  const wasAlreadyAccepted = existing?.status === GrnStatus.ACCEPTED;
 
-  if (totalReceived >= totalOrdered && totalOrdered > 0) {
-    po.status = 'Completed';
-  } else if (totalReceived > 0) {
-    po.status = 'Partially Received';
+  let dbGrn;
+  if (existing) {
+    dbGrn = await prisma.grn.update({
+      where: { id: existing.id },
+      data: {
+        status: grnStatus,
+        acceptedWarehouse: data.acceptedWarehouse || existing.acceptedWarehouse || 'Main Store - PSL',
+        supplierId: supplierId ?? existing.supplierId,
+        purchaseOrderId: purchaseOrderId ?? existing.purchaseOrderId,
+        receivedDate: data.postingDate ? new Date(data.postingDate) : existing.receivedDate
+      }
+    });
+    await prisma.grnItem.deleteMany({ where: { grnId: dbGrn.id } });
+  } else {
+    dbGrn = await prisma.grn.create({
+      data: {
+        id: grnId,
+        grnNumber: grnId,
+        status: grnStatus,
+        acceptedWarehouse: data.acceptedWarehouse || 'Main Store - PSL',
+        supplierId,
+        purchaseOrderId,
+        receivedDate: data.postingDate ? new Date(data.postingDate) : new Date()
+      }
+    });
   }
-};
+
+  if (data.items && Array.isArray(data.items)) {
+    for (const item of data.items) {
+      const rawCode = String(item.itemCode || '').trim();
+      if (!rawCode) continue;
+
+      const parts = rawCode.split(':');
+      const sku = parts[0].trim();
+      const name = parts.length > 1 ? parts.slice(1).join(':').trim() : sku;
+      const acceptedQty = Number(item.acceptedQuantity || item.quantity || 0);
+      const rate = Number(item.rate || item.unitPrice || 0);
+
+      let product = await prisma.product.findFirst({
+        where: {
+          OR: [
+            { sku: { equals: sku, mode: 'insensitive' } },
+            { name: { equals: name, mode: 'insensitive' } }
+          ]
+        }
+      });
+
+      if (!product) {
+        const category = await prisma.category.findFirst({ where: { name: { contains: 'SCREW', mode: 'insensitive' } } })
+          || await prisma.category.findFirst();
+
+        product = await prisma.product.create({
+          data: {
+            sku,
+            name,
+            quantity: 0,
+            cost_price: rate,
+            selling_price: rate,
+            location: data.acceptedWarehouse || 'Main Store - PSL',
+            status: 'Active',
+            categoryId: category?.id || null,
+            partOf: 'RAW MATERIAL',
+            subPartOf: 'WORKSHOP'
+          }
+        });
+      }
+
+      await prisma.grnItem.create({
+        data: {
+          grnId: dbGrn.id,
+          productId: product.id,
+          orderedQuantity: acceptedQty,
+          receivedQuantity: acceptedQty,
+          acceptedQuantity: acceptedQty,
+          rejectedQuantity: 0,
+          unitPrice: rate,
+          remarks: item.itemCode
+        }
+      });
+    }
+  }
+
+  const finalGrn = await prisma.grn.findUnique({
+    where: { id: dbGrn.id },
+    include: { supplier: true, invoice: true, items: { include: { product: true } } }
+  });
+
+  if (grnStatus === GrnStatus.ACCEPTED && !wasAlreadyAccepted) {
+    await processStockIncrementForGrn(finalGrn);
+  }
+
+  return finalGrn;
+}
 
 // GET all GRNs
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { search, status, invoiceId, supplierId, purchaseOrderId } = req.query;
 
-    let dbGrns: any[] = [];
-    try {
-      const whereConditions: any[] = [];
-      if (status && status !== 'ALL') whereConditions.push({ status: status as GrnStatus });
-      if (invoiceId) whereConditions.push({ invoiceId: invoiceId as string });
-      if (supplierId) whereConditions.push({ supplierId: supplierId as string });
-      if (search) {
-        const q = (search as string).trim();
-        whereConditions.push({
-          OR: [
-            { grnNumber: { contains: q, mode: 'insensitive' } },
-            { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } },
-            { supplier: { name: { contains: q, mode: 'insensitive' } } },
-          ],
-        });
-      }
-
-      dbGrns = await prisma.grn.findMany({
-        where: whereConditions.length > 0 ? { AND: whereConditions } : {},
-        orderBy: { createdAt: 'desc' },
-        include: { supplier: true, invoice: true, items: { include: { product: true } } },
-      });
-    } catch (dbErr) {
-      console.log('Database read fallback to memory store for GRNs');
+    const whereConditions: any[] = [];
+    if (status && status !== 'ALL') {
+      const statusUpper = String(status).toUpperCase();
+      if (statusUpper === 'ACCEPTED') whereConditions.push({ status: GrnStatus.ACCEPTED });
+      else if (statusUpper === 'REJECTED') whereConditions.push({ status: GrnStatus.REJECTED });
+      else if (statusUpper === 'DRAFT') whereConditions.push({ status: GrnStatus.DRAFT });
     }
 
-    const dbFormatted = dbGrns.map(g => ({
-      ...g,
-      grnNumber: g.grnNumber || g.id,
-      supplier: g.supplier?.name || g.supplier || 'TATA STEEL',
-      acceptedWarehouse: g.acceptedWarehouse || 'Main Store - PSL',
-      items: g.items?.map((it: any) => ({
-        id: it.id,
-        itemCode: it.product?.sku ? `${it.product.sku}: ${it.product.name}` : it.itemCode || 'ITEM-001',
-        uom: it.uom || 'Pcs',
-        acceptedQuantity: it.quantity || it.acceptedQuantity || 0,
-        rate: it.rate || 0,
-        amount: (it.quantity || it.acceptedQuantity || 0) * (it.rate || 0)
-      })) || []
-    }));
+    if (invoiceId) whereConditions.push({ invoiceId: String(invoiceId) });
+    if (supplierId) whereConditions.push({ supplierId: Number(supplierId) || undefined });
+    if (purchaseOrderId) whereConditions.push({ purchaseOrderId: String(purchaseOrderId) });
 
-    // Combine memory store and DB store (so newly generated GRNs and sample PO GRNs are always returned)
-    const grnMap = new Map();
-    [...sampleGrns, ...dbFormatted].forEach(g => {
-      if (g.id) grnMap.set(g.id, g);
+    if (search) {
+      const q = String(search).trim();
+      whereConditions.push({
+        OR: [
+          { grnNumber: { contains: q, mode: 'insensitive' } },
+          { id: { contains: q, mode: 'insensitive' } },
+          { supplier: { name: { contains: q, mode: 'insensitive' } } },
+          { items: { some: { remarks: { contains: q, mode: 'insensitive' } } } }
+        ]
+      });
+    }
+
+    const dbGrns = await prisma.grn.findMany({
+      where: whereConditions.length > 0 ? { AND: whereConditions } : {},
+      orderBy: { createdAt: 'desc' },
+      include: { supplier: true, invoice: true, items: { include: { product: true } } }
     });
 
-    let filtered = Array.from(grnMap.values());
-
-    if (purchaseOrderId && typeof purchaseOrderId === 'string') {
-      filtered = filtered.filter(g => g.purchaseOrderId === purchaseOrderId || g.id.includes(purchaseOrderId));
-    }
-    if (search && typeof search === 'string' && search.trim()) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter(g =>
-        (g.grnNumber || '').toLowerCase().includes(q) ||
-        (g.supplier && (typeof g.supplier === 'string' ? g.supplier : g.supplier.name || '').toLowerCase().includes(q)) ||
-        (g.supplierInvoiceNumber || '').toLowerCase().includes(q) ||
-        (g.company || '').toLowerCase().includes(q)
-      );
-    }
-    if (status && typeof status === 'string' && status !== 'ALL') {
-      filtered = filtered.filter(g => g.status?.toLowerCase() === status.toLowerCase());
-    }
-
-    res.json(filtered);
+    const formatted = dbGrns.map(formatGrnResponse);
+    res.json(formatted);
   } catch (error) {
+    console.error('Failed to fetch GRNs:', error);
     res.status(500).json({ error: 'Failed to fetch GRNs' });
   }
 });
@@ -210,24 +339,29 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const dbGrn = await prisma.grn.findFirst({
+      where: { OR: [{ id }, { grnNumber: id }] },
+      include: { supplier: true, invoice: true, items: { include: { product: true } } }
+    });
 
-    try {
-      const dbGrn = await prisma.grn.findUnique({
-        where: { id },
-        include: { supplier: true, invoice: true, items: { include: { product: true } } },
-      });
-      if (dbGrn) return res.json(dbGrn);
-    } catch (dbErr) {
-      // Memory fallback
-    }
-
-    const grn = sampleGrns.find(g => g.id === id || g.grnNumber === id);
-    if (!grn) {
+    if (!dbGrn) {
       return res.status(404).json({ error: 'GRN not found' });
     }
-    res.json(grn);
+
+    res.json(formatGrnResponse(dbGrn));
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch GRN' });
+  }
+});
+
+// GET generate next GRN ID
+router.get('/generate-id', async (req: Request, res: Response) => {
+  try {
+    const { postingDate } = req.query;
+    const nextId = await generateNextGrnId(postingDate as string);
+    res.json({ id: nextId, series: 'PS-GR-.YYYY.-.MM.-' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate GRN ID' });
   }
 });
 
@@ -235,46 +369,14 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    const numStr = (nextGrnNum++).toString().padStart(5, '0');
-    const grnId = data.grnNumber || `GRN-2026-09-${numStr}`;
+    const autoGeneratedId = await generateNextGrnId(data.postingDate);
+    data.grnNumber = data.grnNumber || data.id || autoGeneratedId;
+    data.id = data.grnNumber;
 
-    const newGrn = {
-      id: grnId,
-      grnNumber: grnId,
-      series: data.series || 'NCL-GR-.2026.-.09.-',
-      status: data.status || 'Draft',
-      postingDate: data.postingDate || new Date().toISOString().split('T')[0],
-      postingTime: data.postingTime || new Date().toTimeString().split(' ')[0],
-      supplier: data.supplier || '',
-      supplierDeliveryNote: data.supplierDeliveryNote || '',
-      supplierInvoiceNumber: data.supplierInvoiceNumber || '',
-      efdReceipt: data.efdReceipt || '',
-      company: data.company || 'PATEL STRAP INDUSTRIES LTD',
-      applyPutawayRule: Boolean(data.applyPutawayRule),
-      isReturn: Boolean(data.isReturn),
-      defaultHod: data.defaultHod || 'Stock Manager',
-      payment: data.payment || 'Pending',
-      acceptedWarehouse: data.acceptedWarehouse || 'Main Store - PSL',
-      scanBarcode: data.scanBarcode || '',
-      purchaseOrderId: data.purchaseOrderId || '',
-      invoiceId: data.invoiceId || '',
-      createdBy: data.createdBy || 'System User',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      totalQuantity: data.items?.reduce((sum: number, i: any) => sum + (Number(i.acceptedQuantity || i.quantity) || 0), 0) || 0,
-      totalTrips: data.totalTrips || 1,
-      totalAmount: data.items?.reduce((sum: number, i: any) => sum + (Number(i.amount || ((i.acceptedQuantity || i.quantity || 0) * (i.rate || 0)))), 0) || 0,
-      items: data.items || [],
-      taxes: data.taxes || []
-    };
-
-    sampleGrns.unshift(newGrn);
-    if (newGrn.purchaseOrderId) {
-      syncPurchaseOrderReceivedQty(newGrn.purchaseOrderId);
-    }
-
-    res.status(201).json(newGrn);
+    const saved = await saveGrnToDatabase(data);
+    res.status(201).json(formatGrnResponse(saved));
   } catch (error: any) {
+    console.error('Failed to create GRN:', error);
     res.status(500).json({ error: error.message || 'Failed to create GRN' });
   }
 });
@@ -283,23 +385,23 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const data = req.body;
-    const idx = sampleGrns.findIndex(g => g.id === id || g.grnNumber === id);
+    const data = { ...req.body, id, grnNumber: id };
 
-    if (idx !== -1) {
-      sampleGrns[idx] = {
-        ...sampleGrns[idx],
-        ...data,
-        updatedAt: new Date().toISOString()
-      };
-      if (sampleGrns[idx].purchaseOrderId) {
-        syncPurchaseOrderReceivedQty(sampleGrns[idx].purchaseOrderId);
-      }
-      return res.json(sampleGrns[idx]);
-    }
+    const saved = await saveGrnToDatabase(data);
 
-    res.status(404).json({ error: 'GRN not found' });
+    try {
+      await logActivity({
+        entityType: 'GRN',
+        entityId: id,
+        action: 'UPDATE',
+        description: `Updated GRN ${id}`,
+        userId: (req as any).user?.id || (data as any).userId
+      });
+    } catch (e) {}
+
+    res.json(formatGrnResponse(saved));
   } catch (error: any) {
+    console.error('Failed to update GRN:', error);
     res.status(500).json({ error: 'Failed to update GRN' });
   }
 });
@@ -308,15 +410,20 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.post('/:id/accept', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const grn = sampleGrns.find(g => g.id === id || g.grnNumber === id);
+    let grn = await prisma.grn.findFirst({
+      where: { OR: [{ id }, { grnNumber: id }] }
+    });
+
     if (grn) {
-      grn.status = 'ACCEPTED';
-      grn.updatedAt = new Date().toISOString();
-      if (grn.purchaseOrderId) {
-        syncPurchaseOrderReceivedQty(grn.purchaseOrderId);
-      }
-      return res.json({ message: 'GRN accepted successfully', grn });
+      const updated = await prisma.grn.update({
+        where: { id: grn.id },
+        data: { status: GrnStatus.ACCEPTED },
+        include: { supplier: true, invoice: true, items: { include: { product: true } } }
+      });
+      await processStockIncrementForGrn(updated);
+      return res.json({ message: 'GRN accepted successfully', grn: formatGrnResponse(updated) });
     }
+
     res.status(404).json({ error: 'GRN not found' });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to accept GRN' });
@@ -327,7 +434,12 @@ router.post('/:id/accept', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    sampleGrns = sampleGrns.filter(g => g.id !== id && g.grnNumber !== id);
+    await prisma.grnItem.deleteMany({
+      where: { grn: { OR: [{ id }, { grnNumber: id }] } }
+    });
+    await prisma.grn.deleteMany({
+      where: { OR: [{ id }, { grnNumber: id }] }
+    });
     res.json({ message: 'GRN deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete GRN' });

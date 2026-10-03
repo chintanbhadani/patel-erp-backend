@@ -65,23 +65,7 @@ async function calculateValuationsForProduct(product: any, ledgers: any[]) {
   };
 }
 
-const INITIAL_ITEMS = [
-  { sku: 'PSTL001', name: 'PLIER SET', partOf: 'CONSUMABLE', location: 'D-31', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS,CONSUMABLE', disabled: false },
-  { sku: 'PSTL002', name: 'BIT DIA. 115 MM DRILLIN', partOf: 'DRILLING MACHINE', location: 'Q-03', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSTL003', name: 'HSS DRILL BIT 2- 8MM', partOf: 'CONSUMABLE', location: 'LOCKER-A', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW001', name: 'BOX SPANNER 50MM X', partOf: 'HARDWARE', location: 'A1-28', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'PSHW002', name: 'CIRCLIP PLIER INTERNA', partOf: 'HARDWARE', location: 'LOCKER-B', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'PSHW003', name: 'STRAIGHT TIP LOCK RING', partOf: 'HARDWARE', location: 'E-11', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'System User', tags: 'HARDWARE', disabled: false },
-  { sku: 'PSHW004', name: 'ADJUSTABLE SPANNER', partOf: 'HARDWARE', location: 'D-49', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'PSHW005', name: 'DRILL BIT STEEL 22 MM', partOf: 'HARDWARE', location: 'D-26', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW006', name: 'DRILL BIT STEEL 20 MM', partOf: 'HARDWARE', location: 'D-26', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'John Doe', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW007', name: 'ACCESSORIES FOR MIN', partOf: 'HARDWARE', location: 'I-36', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'HARDWARE', disabled: false },
-  { sku: 'PSHW008', name: 'DRILL BIT HSS 13 MM', partOf: 'HARDWARE', location: 'D-32', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW009', name: 'COMBINATION SPANNER 24MM', partOf: 'HARDWARE', location: 'A1-25', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW010', name: 'COMBINATION SPANNER 22MM', partOf: 'HARDWARE', location: 'D-48', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW011', name: 'DRILL BIT MAGNETIC 22MM', partOf: 'HARDWARE', location: 'D-33', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false },
-  { sku: 'PSHW012', name: 'COMBINATION SPANNER 19MM', partOf: 'HARDWARE', location: 'D-31', company: 'PATEL STRAP INDUSTRIES LTD', assignedTo: 'Administrator', tags: 'TOOLS', disabled: false }
-];
+const INITIAL_ITEMS: any[] = [];
 
 async function ensureSeedProducts() {
   try {
@@ -319,6 +303,87 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch inventory:', error);
     res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+});
+
+// Sample Bin Report dataset matching ERPNext Bin Report format
+const SAMPLE_BIN_REPORT: Array<{
+  id: string;
+  itemCode: string;
+  itemName: string;
+  itemGroup: string;
+  partOf: string;
+  subPartOf: string;
+  uom: string;
+  actualQuantity: number;
+  warehouse: string;
+  assignedTo?: string;
+  tags?: string;
+}> = [];
+
+// GET Bin Report (Stock Balance per item per warehouse)
+router.get('/bin-report', async (req: Request, res: Response) => {
+  try {
+    const { search, warehouse, itemGroup, partOf } = req.query;
+
+    const dbProducts = await prisma.product.findMany({
+      include: {
+        category: true,
+        unit: true
+      }
+    });
+
+    const dbBinItems = dbProducts.map(p => ({
+      id: p.id,
+      itemCode: p.sku,
+      itemName: p.name,
+      itemGroup: p.category?.name || 'GENERAL',
+      partOf: p.partOf || 'GENERAL',
+      subPartOf: p.subPartOf || 'GENERAL',
+      uom: p.unit?.name || 'Pcs',
+      actualQuantity: Number(p.quantity || 0),
+      warehouse: p.location || 'Main Store - NCL',
+      assignedTo: p.assignedTo || 'Administrator',
+      tags: p.tags || ''
+    }));
+
+    // Merge database items with sample items (avoiding duplicate SKUs)
+    const existingSkus = new Set(dbBinItems.map(b => `${b.itemCode}_${b.warehouse}`));
+    const extraSamples = SAMPLE_BIN_REPORT.filter(s => !existingSkus.has(`${s.itemCode}_${s.warehouse}`));
+    let list = [...dbBinItems, ...extraSamples];
+
+    // Apply filtering
+    if (search) {
+      const q = String(search).toLowerCase().trim();
+      list = list.filter(item =>
+        item.itemCode.toLowerCase().includes(q) ||
+        item.itemName.toLowerCase().includes(q) ||
+        item.itemGroup.toLowerCase().includes(q) ||
+        item.partOf.toLowerCase().includes(q) ||
+        item.subPartOf.toLowerCase().includes(q) ||
+        item.warehouse.toLowerCase().includes(q)
+      );
+    }
+
+    if (warehouse) {
+      const w = String(warehouse).toLowerCase().trim();
+      list = list.filter(item => item.warehouse.toLowerCase().includes(w));
+    }
+
+    if (itemGroup) {
+      const g = String(itemGroup).toLowerCase().trim();
+      list = list.filter(item => item.itemGroup.toLowerCase().includes(g));
+    }
+
+    if (partOf) {
+      const p = String(partOf).toLowerCase().trim();
+      list = list.filter(item => item.partOf.toLowerCase().includes(p));
+    }
+
+    res.json(list);
+  } catch (error) {
+    console.error('Failed to fetch Bin Report:', error);
+    res.status(500).json({ error: 'Failed to fetch Bin Report' });
   }
 });
 

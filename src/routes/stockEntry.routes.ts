@@ -41,6 +41,11 @@ router.get('/', async (req: Request, res: Response) => {
       ],
       include: {
         product: true,
+        grn: {
+          include: {
+            supplier: true
+          }
+        },
         invoice: {
           include: {
             client: true,

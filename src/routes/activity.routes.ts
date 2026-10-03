@@ -15,23 +15,62 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     let entityIds = [String(entityId)];
-    if (String(entityType) === 'Item') {
+    const typeStr = String(entityType);
+    const idStr = String(entityId);
+
+    if (typeStr === 'MaterialRequest') {
+      const mr = await prisma.materialRequest.findFirst({
+        where: {
+          OR: [
+            { id: idStr },
+            { materialRequestCode: idStr }
+          ]
+        }
+      });
+      if (mr) {
+        entityIds = Array.from(new Set([mr.id, mr.materialRequestCode].filter(Boolean) as string[]));
+      }
+    } else if (typeStr === 'PurchaseOrder') {
+      const po = await prisma.purchaseOrder.findFirst({
+        where: {
+          OR: [
+            { id: idStr },
+            { poNumber: idStr }
+          ]
+        }
+      });
+      if (po) {
+        entityIds = Array.from(new Set([po.id, po.poNumber].filter(Boolean) as string[]));
+      }
+    } else if (typeStr === 'GRN' || typeStr === 'Grn') {
+      const grn = await prisma.grn.findFirst({
+        where: {
+          OR: [
+            { id: idStr },
+            { grnNumber: idStr }
+          ]
+        }
+      });
+      if (grn) {
+        entityIds = Array.from(new Set([grn.id, grn.grnNumber].filter(Boolean) as string[]));
+      }
+    } else if (typeStr === 'Item') {
       const p = await prisma.product.findFirst({
         where: {
           OR: [
-            { id: String(entityId) },
-            { sku: String(entityId) }
+            { id: idStr },
+            { sku: idStr }
           ]
         }
       });
       if (p) {
-        entityIds = Array.from(new Set([p.id, p.sku].filter(Boolean)));
+        entityIds = Array.from(new Set([p.id, p.sku].filter(Boolean) as string[]));
       }
     }
 
     const activities = await prisma.activityLog.findMany({
       where: {
-        entityType: String(entityType),
+        entityType: { in: [typeStr, typeStr.toLowerCase(), typeStr.toUpperCase()] },
         entityId: { in: entityIds },
       },
       include: {
