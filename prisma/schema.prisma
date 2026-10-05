@@ -391,6 +391,7 @@ model Client {
   invoices                  Invoice[]
   payments                  Payment[]
   purchaseOrders            PurchaseOrder[]
+  productionOrders          ProductionOrder[]
 }
 
 model Inquiry {
@@ -609,4 +610,86 @@ model MaterialRequestItem {
   purchaseOrderItems PurchaseOrderItem[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+}
+
+model ProductionOrder {
+  id                      String                  @id @default(uuid())
+  orderNumber             String?                 @unique
+  series                  String?                 @default("PSPL/PO-.YYYY.-.MM.-")
+  orderSheetDate          DateTime                @default(now())
+  customerStatus          String?                 @default("OLD")
+  state                   String?
+  city                    String?
+  customerType            String?                 @default("USER")
+  apxDispatchDays         String?
+  creditDays              String?
+  piNo                    String?
+  customerName            String
+  clientId                Int?
+  client                  Client?                 @relation(fields: [clientId], references: [id])
+  billingAddress          String?
+  email                   String?
+  contactNo               String?
+  contactPerson           String?
+  consigneeAddress        String?
+  deliveryTerms           String?
+  poNumber                String?
+  poDate                  DateTime?
+  customerGstin           String?
+  packingDetails          String?
+  stackingDetails         String?
+  remarks                 String?
+  marketing               String?
+  ndAmount                Float?
+  odAmount                Float?
+  odDays                  Int?
+  paymentStatus           String?                 @default("Pending")
+  production              String?
+  logistic                String?
+  account                 String?
+  managingDirector        String?
+  authorisedSign          String?
+  transporterName         String?
+  transportGstin          String?
+  lrNo                    String?
+  lrDate                  DateTime?
+  vehicleNo               String?
+  driverName              String?
+  mobileNo                String?
+  insurance               String?                 @default("YES")
+  waybillPartB            String?                 @default("YES")
+  dispatchDate            DateTime?
+  status                  String                  @default("Draft")
+  assignedTo              String?
+  tags                    String?
+  attachments             Json?
+  createdAt               DateTime                @default(now())
+  createdBy               String?
+  updatedAt               DateTime                @updatedAt
+  items                   ProductionOrderItem[]
+}
+
+model ProductionOrderItem {
+  id                      String          @id @default(uuid())
+  productionOrderId       String
+  productionOrder         ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  srNo                    Int?
+  sizeLength              String?
+  colour                  String?
+  coreSize                String?
+  surface                 String?
+  noOfArticles            Int?
+  netWtArticles           Float?
+  mtrsPerArticles         Float?
+  totalWt                 Float?
+  quantity                Float?
+  unit                    String?         @default("NOS")
+  ratePerUnit             Float?
+  breakingLoad            String?
+  palletQuantity          String?
+  gstPercent              Float?          @default(18.0)
+  freightTerms            String?         @default("PAID")
+  totalAmount             Float?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 }
