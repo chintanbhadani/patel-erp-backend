@@ -5,22 +5,74 @@ import { logActivity, createFieldDiffDescriptionAsync } from '../services/activi
 const router = Router();
 const prisma = new PrismaClient();
 
-// Helper to auto-generate PO ID: PO-YYYY-MM-XXXXX
-async function generateNextPoId(): Promise<string> {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const prefix = `PO-${year}-${month}-`;
+// Helper to calculate Indian Financial Year suffix (e.g. 26-27 for FY 2026-2027)
+function getFinancialYearSuffix(dateInput?: Date | string): string {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  const month = validDate.getMonth() + 1; // 1 to 12
+  const year = validDate.getFullYear();
 
-  const count = await prisma.purchaseOrder.count({
+  let startYear = year;
+  if (month < 4) {
+    startYear = year - 1;
+  }
+  const endYear = startYear + 1;
+
+  const startYY = String(startYear).slice(-2);
+  const endYY = String(endYear).slice(-2);
+
+  return `${startYY}-${endYY}`;
+}
+
+// Helper to auto-generate PO ID: PO/CHE-OIIP/xxxx/26-27
+async function generateNextPoId(transactionDate?: Date | string): Promise<string> {
+  const fy = getFinancialYearSuffix(transactionDate);
+  const prefix = `PO/CHE-OIIP/`;
+
+  const existing = await prisma.purchaseOrder.findMany({
     where: {
-      id: { startsWith: prefix }
+      OR: [
+        { id: { startsWith: prefix } },
+        { poNumber: { startsWith: prefix } }
+      ]
+    },
+    select: { id: true, poNumber: true }
+  });
+
+  let maxSeq = 0;
+  existing.forEach(po => {
+    const code = po.poNumber || po.id || '';
+    if (code.startsWith(prefix)) {
+      const parts = code.split('/');
+      // Expected parts: ['PO', 'CHE-OIIP', '0846', '26-27']
+      if (parts.length >= 3) {
+        const seqNum = parseInt(parts[2], 10);
+        if (!isNaN(seqNum) && seqNum > maxSeq) {
+          maxSeq = seqNum;
+        }
+      }
     }
   });
 
-  const nextSeq = (count + 1).toString().padStart(5, '0');
-  return `${prefix}${nextSeq}`;
+  if (maxSeq === 0) {
+    const count = await prisma.purchaseOrder.count();
+    maxSeq = count;
+  }
+
+  const nextSeq = (maxSeq + 1).toString().padStart(4, '0');
+  return `PO/CHE-OIIP/${nextSeq}/${fy}`;
 }
+
+// GET next PO ID preview
+router.get('/next-id', async (req: Request, res: Response) => {
+  try {
+    const { date } = req.query;
+    const nextId = await generateNextPoId(date as string);
+    res.json({ id: nextId, series: 'PO/CHE-OIIP/xxxx/26-27' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate next PO ID' });
+  }
+});
 
 // Helper to resolve product ID from Product table
 async function resolveProductId(productId?: string, itemCode?: string): Promise<string | null> {
@@ -152,7 +204,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    const generatedPoCode = await generateNextPoId();
+    const generatedPoCode = await generateNextPoId(data.transactionDate);
     const poNum = (data.poNumber || data.id) && (data.id !== 'new' && data.poNumber !== 'new')
       ? (data.poNumber || data.id)
       : generatedPoCode;
@@ -177,7 +229,7 @@ router.post('/', async (req: Request, res: Response) => {
       data: {
         id: poNum,
         poNumber: poNum,
-        series: data.series || 'NCL-.YYYY.-.MM.-',
+        series: data.series || 'PO/CHE-OIIP/xxxx/26-27',
         status: data.status || 'Draft',
         approvalStatus: data.approvalStatus || 'Draft',
         company: data.company || 'PATEL STRAP INDUSTRIES LTD',
@@ -279,13 +331,13 @@ router.put('/:id', async (req: Request, res: Response) => {
     let updated;
     if (!existing) {
       // Create if not exists
-      const generatedPoCode = await generateNextPoId();
+      const generatedPoCode = await generateNextPoId(data.transactionDate);
       const poNum = data.poNumber || id || generatedPoCode;
       updated = await prisma.purchaseOrder.create({
         data: {
           id: poNum,
           poNumber: poNum,
-          series: data.series || 'NCL-.YYYY.-.MM.-',
+          series: data.series || 'PO/CHE-OIIP/xxxx/26-27',
           status: data.status || 'Draft',
           approvalStatus: data.approvalStatus || 'Draft',
           company: data.company || 'PATEL STRAP INDUSTRIES LTD',

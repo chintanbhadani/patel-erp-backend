@@ -238,6 +238,15 @@ model Product {
   hsnCode                String?
   taxRate                Float?      @default(18)
 
+  // Roll Specifications (When Part Of is Roll)
+  rollLength             Float?      @default(0)
+  rollWidth              Float?      @default(0)
+  rollCoreLength         Float?      @default(0)
+  rollCoreDiameter       Float?      @default(0)
+  rollSurface            String?     @default("Roll Emboss")
+  rollWeight             Float?      @default(0)
+  rollJoint              String?     @default("No Joint")
+
   invoiceItems           InvoiceItem[]
   stockLedgers           StockLedger[]
   grnItems               GrnItem[]
