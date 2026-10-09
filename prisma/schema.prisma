@@ -702,3 +702,39 @@ model ProductionOrderItem {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 }
+
+model StickerCodeConfig {
+  id               String   @id @default(uuid())
+  key              String   @unique @default("DEFAULT")
+  weightLetterMap  Json
+  monthLetterMap   Json
+  yearLetterMap    Json
+  shiftMap         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WeighmentLedgerEntry {
+  id                 String   @id @default(uuid())
+  rollStickerCode    String   @unique
+  ginningStickerCode String
+  productionOrderId  String?
+  machineNo          String
+  productName        String
+  sizeDimensions     String
+  color              String
+  rollGrade          String   @default("GRADE_A")
+  grossWeightKg      Float
+  tareWeightKg       Float
+  actualNetWeightKg  Float
+  billedWeightKg     Float
+  giveawayWeightKg   Float
+  strapLengthMeters  Float
+  shift              String   @default("D")
+  manualSuffix       String?
+  operatorName       String
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
