@@ -243,9 +243,9 @@ model Product {
   rollWidth              Float?      @default(0)
   rollCoreLength         Float?      @default(0)
   rollCoreDiameter       Float?      @default(0)
-  rollSurface            String?     @default("Roll Emboss")
+  rollSurface            String?
   rollWeight             Float?      @default(0)
-  rollJoint              String?     @default("No Joint")
+  rollJoint              String?
 
   invoiceItems           InvoiceItem[]
   stockLedgers           StockLedger[]

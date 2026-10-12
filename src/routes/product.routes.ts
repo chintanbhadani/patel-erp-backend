@@ -527,13 +527,41 @@ router.post('/', async (req: Request, res: Response) => {
         expenseAccount: data.expenseAccount || null,
         hsnCode: data.hsnCode || null,
         taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : 18,
-        rollLength: data.rollLength !== undefined ? parseFloat(data.rollLength) : 0,
-        rollWidth: data.rollWidth !== undefined ? parseFloat(data.rollWidth) : 0,
-        rollCoreLength: data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : 0,
-        rollCoreDiameter: data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : 0,
-        rollSurface: data.rollSurface || 'Roll Emboss',
-        rollWeight: data.rollWeight !== undefined ? parseFloat(data.rollWeight) : 0,
-        rollJoint: data.rollJoint || 'No Joint',
+        rollLength: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll && data.rollLength !== undefined ? parseFloat(data.rollLength) : 0;
+        })(),
+        rollWidth: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll && data.rollWidth !== undefined ? parseFloat(data.rollWidth) : 0;
+        })(),
+        rollCoreLength: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll && data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : 0;
+        })(),
+        rollCoreDiameter: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll && data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : 0;
+        })(),
+        rollSurface: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollSurface || 'Roll Emboss') : null;
+        })(),
+        rollWeight: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll && data.rollWeight !== undefined ? parseFloat(data.rollWeight) : 0;
+        })(),
+        rollJoint: (() => {
+          const partOfStr = (data.partOf || '').trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollJoint || 'No Joint') : null;
+        })(),
       },
       include: {
         category: true,
@@ -628,14 +656,41 @@ router.put('/:id', async (req: Request, res: Response) => {
         incomeAccount: data.incomeAccount,
         expenseAccount: data.expenseAccount,
         hsnCode: data.hsnCode,
-        taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : undefined,
-        rollLength: data.rollLength !== undefined ? parseFloat(data.rollLength) : undefined,
-        rollWidth: data.rollWidth !== undefined ? parseFloat(data.rollWidth) : undefined,
-        rollCoreLength: data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : undefined,
-        rollCoreDiameter: data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : undefined,
-        rollSurface: data.rollSurface,
-        rollWeight: data.rollWeight !== undefined ? parseFloat(data.rollWeight) : undefined,
-        rollJoint: data.rollJoint,
+        rollLength: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollLength !== undefined ? parseFloat(data.rollLength) : undefined) : 0;
+        })(),
+        rollWidth: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollWidth !== undefined ? parseFloat(data.rollWidth) : undefined) : 0;
+        })(),
+        rollCoreLength: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : undefined) : 0;
+        })(),
+        rollCoreDiameter: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : undefined) : 0;
+        })(),
+        rollSurface: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollSurface !== undefined ? data.rollSurface : undefined) : null;
+        })(),
+        rollWeight: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollWeight !== undefined ? parseFloat(data.rollWeight) : undefined) : 0;
+        })(),
+        rollJoint: (() => {
+          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
+          const isRoll = partOfStr.includes('roll');
+          return isRoll ? (data.rollJoint !== undefined ? data.rollJoint : undefined) : null;
+        })(),
       },
       include: {
         category: true,
