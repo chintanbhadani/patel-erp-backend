@@ -527,41 +527,14 @@ router.post('/', async (req: Request, res: Response) => {
         expenseAccount: data.expenseAccount || null,
         hsnCode: data.hsnCode || null,
         taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : 18,
-        rollLength: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll && data.rollLength !== undefined ? parseFloat(data.rollLength) : 0;
-        })(),
-        rollWidth: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll && data.rollWidth !== undefined ? parseFloat(data.rollWidth) : 0;
-        })(),
-        rollCoreLength: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll && data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : 0;
-        })(),
-        rollCoreDiameter: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll && data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : 0;
-        })(),
-        rollSurface: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollSurface || 'Roll Emboss') : null;
-        })(),
-        rollWeight: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll && data.rollWeight !== undefined ? parseFloat(data.rollWeight) : 0;
-        })(),
-        rollJoint: (() => {
-          const partOfStr = (data.partOf || '').trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollJoint || 'No Joint') : null;
-        })(),
+        rollLength: data.rollLength !== undefined && data.rollLength !== null && data.rollLength !== '' ? parseFloat(data.rollLength) : 0,
+        rollWidth: data.rollWidth !== undefined && data.rollWidth !== null && data.rollWidth !== '' ? parseFloat(data.rollWidth) : 0,
+        rollCoreLength: data.rollCoreLength !== undefined && data.rollCoreLength !== null && data.rollCoreLength !== '' ? parseFloat(data.rollCoreLength) : 0,
+        rollCoreDiameter: data.rollCoreDiameter !== undefined && data.rollCoreDiameter !== null && data.rollCoreDiameter !== '' ? parseFloat(data.rollCoreDiameter) : 0,
+        rollDiaSize: data.rollDiaSize !== undefined && data.rollDiaSize !== null && data.rollDiaSize !== '' ? parseFloat(data.rollDiaSize) : 0,
+        rollSurface: data.rollSurface ? String(data.rollSurface) : null,
+        rollWeight: data.rollWeight !== undefined && data.rollWeight !== null && data.rollWeight !== '' ? parseFloat(data.rollWeight) : 0,
+        rollJoint: data.rollJoint ? String(data.rollJoint) : null,
       },
       include: {
         category: true,
@@ -656,41 +629,14 @@ router.put('/:id', async (req: Request, res: Response) => {
         incomeAccount: data.incomeAccount,
         expenseAccount: data.expenseAccount,
         hsnCode: data.hsnCode,
-        rollLength: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollLength !== undefined ? parseFloat(data.rollLength) : undefined) : 0;
-        })(),
-        rollWidth: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollWidth !== undefined ? parseFloat(data.rollWidth) : undefined) : 0;
-        })(),
-        rollCoreLength: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollCoreLength !== undefined ? parseFloat(data.rollCoreLength) : undefined) : 0;
-        })(),
-        rollCoreDiameter: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollCoreDiameter !== undefined ? parseFloat(data.rollCoreDiameter) : undefined) : 0;
-        })(),
-        rollSurface: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollSurface !== undefined ? data.rollSurface : undefined) : null;
-        })(),
-        rollWeight: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollWeight !== undefined ? parseFloat(data.rollWeight) : undefined) : 0;
-        })(),
-        rollJoint: (() => {
-          const partOfStr = (data.partOf !== undefined ? data.partOf : (oldProduct?.partOf || '')).trim().toLowerCase();
-          const isRoll = partOfStr.includes('roll');
-          return isRoll ? (data.rollJoint !== undefined ? data.rollJoint : undefined) : null;
-        })(),
+        rollLength: data.rollLength !== undefined && data.rollLength !== null && data.rollLength !== '' ? parseFloat(data.rollLength) : (data.rollLength === '' ? 0 : undefined),
+        rollWidth: data.rollWidth !== undefined && data.rollWidth !== null && data.rollWidth !== '' ? parseFloat(data.rollWidth) : (data.rollWidth === '' ? 0 : undefined),
+        rollCoreLength: data.rollCoreLength !== undefined && data.rollCoreLength !== null && data.rollCoreLength !== '' ? parseFloat(data.rollCoreLength) : (data.rollCoreLength === '' ? 0 : undefined),
+        rollCoreDiameter: data.rollCoreDiameter !== undefined && data.rollCoreDiameter !== null && data.rollCoreDiameter !== '' ? parseFloat(data.rollCoreDiameter) : (data.rollCoreDiameter === '' ? 0 : undefined),
+        rollDiaSize: data.rollDiaSize !== undefined && data.rollDiaSize !== null && data.rollDiaSize !== '' ? parseFloat(data.rollDiaSize) : (data.rollDiaSize === '' ? 0 : undefined),
+        rollSurface: data.rollSurface !== undefined ? (data.rollSurface || null) : undefined,
+        rollWeight: data.rollWeight !== undefined && data.rollWeight !== null && data.rollWeight !== '' ? parseFloat(data.rollWeight) : (data.rollWeight === '' ? 0 : undefined),
+        rollJoint: data.rollJoint !== undefined ? (data.rollJoint || null) : undefined,
       },
       include: {
         category: true,
@@ -757,11 +703,206 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// POST bulk upload
+export async function processBulkProductItems(rows: any[]): Promise<{ successCount: number; errors: string[]; createdCount: number; updatedCount: number }> {
+  let successCount = 0;
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 2;
+
+    try {
+      const name = String(row.name || row['Item Name'] || row.itemName || '').trim();
+      if (!name) {
+        errors.push(`Row ${rowNum}: Item Name is required`);
+        continue;
+      }
+
+      // Category
+      let categoryId: number | null = null;
+      const catName = String(row.categoryId || row.category || row.categoryName || row['Item Group'] || row.itemGroup || '').trim();
+      if (catName) {
+        const numCat = Number(catName);
+        let cat = !isNaN(numCat) && numCat > 0
+          ? await prisma.category.findUnique({ where: { id: numCat } })
+          : await prisma.category.findFirst({ where: { name: { equals: catName, mode: 'insensitive' } } });
+        if (!cat) {
+          cat = await prisma.category.create({ data: { name: catName } });
+        }
+        categoryId = cat.id;
+      }
+
+      // Unit
+      let unitId: number | null = null;
+      const uomName = String(row.unitId || row.unit || row.unitName || row.uom || row['Default Unit of Measure'] || row['Unit of Measure'] || '').trim();
+      if (uomName) {
+        const numUnit = Number(uomName);
+        let unit = !isNaN(numUnit) && numUnit > 0
+          ? await prisma.unit.findUnique({ where: { id: numUnit } })
+          : await prisma.unit.findFirst({ where: { name: { equals: uomName, mode: 'insensitive' } } });
+        if (!unit) {
+          unit = await prisma.unit.create({ data: { name: uomName } });
+        }
+        unitId = unit.id;
+      }
+
+      // Part Of
+      let partOfStr = String(row.partOf || row['Part Of'] || '').trim();
+      if (partOfStr) {
+        const existingPartOf = await prisma.partOf.findFirst({ where: { name: { equals: partOfStr, mode: 'insensitive' } } });
+        if (!existingPartOf) {
+          await prisma.partOf.create({ data: { name: partOfStr } });
+        }
+      }
+
+      // Sub Part Of
+      let subPartOfStr = String(row.subPartOf || row['Sub Part Of'] || '').trim();
+      if (subPartOfStr) {
+        const existingSub = await prisma.subPartOf.findFirst({ where: { name: { equals: subPartOfStr, mode: 'insensitive' } } });
+        if (!existingSub) {
+          await prisma.subPartOf.create({ data: { name: subPartOfStr } });
+        }
+      }
+
+      // Company
+      const company = String(row.company || row['Company'] || 'PATEL STRAP INDUSTRIES LTD').trim();
+
+      // SKU (Item Code)
+      let sku = String(row.sku || row['SKU'] || row['Item Code'] || row.itemCode || '').trim();
+      if (!sku) {
+        sku = await generateNextItemCodeBackend(company, categoryId);
+      }
+
+      // Numbers
+      const cost_price = parseFloat(row.cost_price || row.costPrice || row['Standard Cost Price'] || row['Cost Price'] || 0) || 0;
+      const selling_price = parseFloat(row.selling_price || row.sellingPrice || row['Standard Selling Rate'] || row['Selling Price'] || 0) || 0;
+      const min_stock = parseInt(row.min_stock || row.minStock || row['Min Stock'] || 0, 10) || 0;
+      const quantity = parseInt(row.quantity || row['Quantity'] || 0, 10) || 0;
+      const valuationRate = parseFloat(row.valuationRate || row['Valuation Rate'] || 0) || 0;
+      const taxRate = parseFloat(row.taxRate || row['GST Rate (%)'] || row['GST Rate'] || row['Tax Rate'] || 18) || 18;
+      const overDeliveryAllowance = parseFloat(row.overDeliveryAllowance || row['Over Delivery Allowance (%)'] || 0) || 0;
+      const overBillingAllowance = parseFloat(row.overBillingAllowance || row['Over Billing Allowance (%)'] || 0) || 0;
+
+      // Booleans
+      const parseBool = (val: any, def = false): boolean => {
+        if (val === undefined || val === null || val === '') return def;
+        if (typeof val === 'boolean') return val;
+        const s = String(val).toLowerCase().trim();
+        return s === 'true' || s === 'yes' || s === '1' || s === 'y';
+      };
+
+      const disabled = parseBool(row.disabled || row['Disabled'], false);
+      const maintainStock = parseBool(row.maintainStock || row['Maintain Stock'], true);
+      const allowAlternativeItem = parseBool(row.allowAlternativeItem || row['Allow Alternative Item'], false);
+      const excisableItem = parseBool(row.excisableItem || row['Excisable Item'], false);
+      const hasVariants = parseBool(row.hasVariants || row['Has Variants'], false);
+      const includeInManufacturing = parseBool(row.includeInManufacturing || row['Include Item In Manufacturing'], true);
+      const isFixedAsset = parseBool(row.isFixedAsset || row['Is Fixed Asset'], false);
+
+      // Strings
+      const location = String(row.location || row.binLocation || row['Bin Location'] || '').trim();
+      const status = disabled ? 'Inactive' : (String(row.status || row['Status'] || 'Active').trim() === 'Inactive' ? 'Inactive' : 'Active');
+      const incomeAccount = String(row.incomeAccount || row['Income Account'] || 'Sales Account - PS').trim();
+      const expenseAccount = String(row.expenseAccount || row['Expense Account'] || 'Cost of Goods Sold - PS').trim();
+      const hsnCode = String(row.hsnCode || row['HSN Code'] || '39269099').trim();
+      const activityType = String(row.activityType || row['Activity Type'] || '').trim();
+      const assignedTo = String(row.assignedTo || row['Assigned To'] || '').trim();
+      const tags = String(row.tags || row['Tags'] || '').trim();
+
+      // Roll Specifications
+      const rollLength = parseFloat(row.rollLength || row['Roll Length'] || row['Length'] || 0) || 0;
+      const rollWidth = parseFloat(row.rollWidth || row['Roll Width'] || row['Width'] || 0) || 0;
+      const rollCoreLength = parseFloat(row.rollCoreLength || row['Roll Core Length'] || row['Core Length'] || 0) || 0;
+      const rollCoreDiameter = parseFloat(row.rollCoreDiameter || row['Roll Core Diameter'] || row['Core Diameter'] || 0) || 0;
+      const rollDiaSize = parseFloat(row.rollDiaSize || row['Roll Dia Size'] || row['Dia Size'] || 0) || 0;
+      const rollWeight = parseFloat(row.rollWeight || row['Roll Weight'] || row['Weight'] || 0) || 0;
+
+      const rawSurface = String(row.rollSurface || row['Roll Surface'] || row['Surface'] || '').trim();
+      const rollSurface = rawSurface ? (rawSurface.toLowerCase().includes('plain') ? 'Roll Plain' : 'Roll Emboss') : (catName.toLowerCase().includes('roll') ? 'Roll Emboss' : null);
+
+      const rawJoint = String(row.rollJoint || row['Roll Joint'] || row['Roll Joint Status'] || row['Joint Status'] || row['Joint'] || '').trim();
+      const rollJoint = rawJoint ? (rawJoint.toLowerCase() === 'joint' ? 'Joint' : 'No Joint') : (catName.toLowerCase().includes('roll') ? 'No Joint' : null);
+
+      const productData = {
+        name,
+        quantity,
+        cost_price,
+        selling_price,
+        min_stock,
+        categoryId,
+        unitId,
+        location,
+        status: status as any,
+        company,
+        partOf: partOfStr || null,
+        subPartOf: subPartOfStr || null,
+        disabled,
+        maintainStock,
+        allowAlternativeItem,
+        excisableItem,
+        hasVariants,
+        includeInManufacturing,
+        isFixedAsset,
+        valuationRate,
+        overDeliveryAllowance,
+        overBillingAllowance,
+        incomeAccount,
+        expenseAccount,
+        hsnCode,
+        taxRate,
+        activityType: activityType || null,
+        assignedTo: assignedTo || null,
+        tags: tags || null,
+        rollLength,
+        rollWidth,
+        rollCoreLength,
+        rollCoreDiameter,
+        rollDiaSize,
+        rollSurface,
+        rollWeight,
+        rollJoint
+      };
+
+      const existing = await prisma.product.findUnique({ where: { sku } });
+      if (existing) {
+        await prisma.product.update({
+          where: { sku },
+          data: productData
+        });
+        updatedCount++;
+      } else {
+        await prisma.product.create({
+          data: {
+            sku,
+            ...productData
+          }
+        });
+        createdCount++;
+      }
+
+      // Sync SkuMaster
+      try {
+        await prisma.skuMaster.upsert({
+          where: { sku },
+          update: { name, categoryId },
+          create: { sku, name, categoryId }
+        });
+      } catch (e) {}
+
+      successCount++;
+    } catch (err: any) {
+      errors.push(`Row ${rowNum}: ${err.message || 'Failed to process row'}`);
+    }
+  }
+
+  return { successCount, errors, createdCount, updatedCount };
+}
+
+// POST bulk upload (multipart file)
 router.post('/bulk-upload', upload.single('file'), async (req: Request, res: Response) => {
   try {
-    console.log(" call bulk-upload :: ");
-    
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -771,78 +912,35 @@ router.post('/bulk-upload', upload.single('file'), async (req: Request, res: Res
     const sheet = workbook.Sheets[sheetName];
     const rows = xlsx.utils.sheet_to_json<any>(sheet);
 
-    let successCount = 0;
-    const errors = [];
+    const result = await processBulkProductItems(rows);
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      try {
-        // Validation
-        if (!row.sku || !row.name || row.quantity === undefined || !row.cost_price || !row.selling_price || !row.categoryName || !row.supplierName) {
-          errors.push(`Row ${i + 2}: Missing required fields`);
-          continue;
-        }
+    res.json({
+      message: `Successfully processed ${result.successCount} items (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk upload error', error);
+    res.status(500).json({ error: 'Failed to process bulk upload', message: error?.message });
+  }
+});
 
-        // Find or create Category
-        let category = await prisma.category.findFirst({ where: { name: row.categoryName } });
-        if (!category) {
-          category = await prisma.category.create({ data: { name: row.categoryName } });
-        }
-
-        // Find or create Supplier
-        let supplier = await prisma.supplier.findFirst({ where: { name: row.supplierName } });
-        if (!supplier) {
-          supplier = await prisma.supplier.create({ data: { name: row.supplierName } });
-        }
-
-        // Find or create Unit
-        let unit = null;
-        if (row.unitName) {
-          unit = await prisma.unit.findFirst({ where: { name: row.unitName } });
-          if (!unit) {
-            unit = await prisma.unit.create({ data: { name: row.unitName } });
-          }
-        }
-
-        // Upsert Product
-        await prisma.product.upsert({
-          where: { sku: row.sku.toString() },
-          update: {
-            name: row.name,
-            quantity: parseInt(row.quantity),
-            cost_price: parseFloat(row.cost_price),
-            selling_price: parseFloat(row.selling_price),
-            min_stock: parseInt(row.min_stock) || 0,
-            categoryId: category.id,
-            supplierId: supplier.id,
-            unitId: unit?.id || null,
-            location: row.location || '',
-            status: row.status || 'Active',
-          },
-          create: {
-            sku: row.sku.toString(),
-            name: row.name,
-            quantity: parseInt(row.quantity),
-            cost_price: parseFloat(row.cost_price),
-            selling_price: parseFloat(row.selling_price),
-            min_stock: parseInt(row.min_stock) || 0,
-            categoryId: category.id,
-            supplierId: supplier.id,
-            unitId: unit?.id || null,
-            location: row.location || '',
-            status: row.status || 'Active',
-          },
-        });
-        successCount++;
-      } catch (err: any) {
-        errors.push(`Row ${i + 2}: ${err.message}`);
-      }
+// POST bulk import (JSON array)
+router.post('/bulk-import', async (req: Request, res: Response) => {
+  try {
+    const items = req.body.items || req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No items provided for import' });
     }
 
-    res.json({ message: `Successfully processed ${successCount} rows.`, errors });
-  } catch (error) {
-    console.error('Bulk upload error', { error });
-    res.status(500).json({ error: 'Failed to process bulk upload' });
+    const result = await processBulkProductItems(items);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} items (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk import error', error);
+    res.status(500).json({ error: 'Failed to process bulk import', message: error?.message });
   }
 });
 
