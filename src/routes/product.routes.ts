@@ -420,7 +420,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-async function generateNextItemCodeBackend(companyName?: string, categoryId?: number | null, requestedSku?: string): Promise<string> {
+async function generateNextItemCodeBackend(companyName?: string, categoryId?: any, requestedSku?: string): Promise<string> {
   let compPrefix = 'PS';
   const compUpper = (companyName || '').toUpperCase();
   if (compUpper.includes('TANSA')) compPrefix = 'TAN';
@@ -428,17 +428,25 @@ async function generateNextItemCodeBackend(companyName?: string, categoryId?: nu
 
   let groupCode = 'TL';
   if (categoryId) {
-    const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } });
-    if (cat && cat.name) {
-      const g = cat.name.toUpperCase();
-      if (g.includes('TOOL')) groupCode = 'TL';
-      else if (g.includes('HARDWARE')) groupCode = 'HW';
-      else if (g.includes('CONSUMABLE')) groupCode = 'CM';
-      else if (g.includes('ELECTRICAL')) groupCode = 'EL';
-      else if (g.includes('STEEL')) groupCode = 'ST';
-      else if (g.includes('RAW')) groupCode = 'RM';
-      else if (g.includes('MACHINE') || g.includes('SPARE')) groupCode = 'HL';
-      else if (g.length >= 2) groupCode = g.substring(0, 2);
+    const rawId = typeof categoryId === 'object' && categoryId !== null ? categoryId.id : categoryId;
+    const catIdNum = parseInt(String(rawId), 10);
+    if (!isNaN(catIdNum) && catIdNum > 0) {
+      try {
+        const cat = await prisma.category.findUnique({ where: { id: catIdNum } });
+        if (cat && cat.name) {
+          const g = cat.name.toUpperCase();
+          if (g.includes('TOOL')) groupCode = 'TL';
+          else if (g.includes('HARDWARE')) groupCode = 'HW';
+          else if (g.includes('CONSUMABLE')) groupCode = 'CM';
+          else if (g.includes('ELECTRICAL')) groupCode = 'EL';
+          else if (g.includes('STEEL')) groupCode = 'ST';
+          else if (g.includes('RAW')) groupCode = 'RM';
+          else if (g.includes('MACHINE') || g.includes('SPARE')) groupCode = 'HL';
+          else if (g.length >= 2) groupCode = g.substring(0, 2);
+        }
+      } catch (err) {
+        console.warn('Could not fetch category by ID for SKU generation:', err);
+      }
     }
   }
 
@@ -486,7 +494,37 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required field: name' });
     }
 
+    const parseId = (val: any): number | null => {
+      if (!val) return null;
+      if (typeof val === 'object' && val !== null) val = val.id;
+      const parsed = parseInt(String(val), 10);
+      return isNaN(parsed) || parsed <= 0 ? null : parsed;
+    };
+
     const finalSku = await generateNextItemCodeBackend(data.company, data.categoryId, data.sku);
+
+    const parsedCatId = parseId(data.categoryId);
+    let validCategoryId: number | null = null;
+    if (parsedCatId) {
+      const catExists = await prisma.category.findUnique({ where: { id: parsedCatId } });
+      if (catExists) validCategoryId = parsedCatId;
+    }
+
+    const parsedSupId = parseId(data.supplierId);
+    let validSupplierId: number | null = null;
+    if (parsedSupId) {
+      const supExists = await prisma.supplier.findUnique({ where: { id: parsedSupId } });
+      if (supExists) validSupplierId = parsedSupId;
+    }
+
+    const parsedUnitId = parseId(data.unitId);
+    let validUnitId: number | null = null;
+    if (parsedUnitId) {
+      const unitExists = await prisma.unit.findUnique({ where: { id: parsedUnitId } });
+      if (unitExists) validUnitId = parsedUnitId;
+    }
+
+    const normalizedStatus = (data.disabled ? 'Inactive' : (data.status || 'Active')).toLowerCase() === 'inactive' ? 'Inactive' : 'Active';
 
     const product = await prisma.product.create({
       data: {
@@ -496,11 +534,11 @@ router.post('/', async (req: Request, res: Response) => {
         cost_price: parseFloat(data.cost_price) || 0,
         selling_price: parseFloat(data.selling_price) || 0,
         min_stock: parseInt(data.min_stock) || 0,
-        categoryId: data.categoryId || null,
-        supplierId: data.supplierId || null,
-        unitId: data.unitId || null,
+        categoryId: validCategoryId,
+        supplierId: validSupplierId,
+        unitId: validUnitId,
         location: data.location || '',
-        status: data.disabled ? 'Inactive' : (data.status || 'Active'),
+        status: normalizedStatus as any,
 
         company: data.company || null,
         partOf: data.partOf || null,
@@ -569,8 +607,14 @@ router.post('/', async (req: Request, res: Response) => {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'SKU must be unique', message: 'SKU must be unique' });
     }
+    if (error.code === 'P2003') {
+      return res.status(400).json({ error: 'Foreign key constraint failed', message: 'Referenced category, supplier, or unit does not exist.' });
+    }
     console.error('Failed to create product:', error);
-    res.status(500).json({ error: 'Failed to create product', message: 'Failed to create product' });
+    res.status(500).json({ 
+      error: 'Failed to create product', 
+      message: error?.message || 'Failed to create product' 
+    });
   }
 });
 
@@ -589,6 +633,50 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     });
 
+    const parseId = (val: any): number | null => {
+      if (!val) return null;
+      if (typeof val === 'object' && val !== null) val = val.id;
+      const parsed = parseInt(String(val), 10);
+      return isNaN(parsed) || parsed <= 0 ? null : parsed;
+    };
+
+    let validCategoryId: number | null | undefined = undefined;
+    if (data.categoryId !== undefined) {
+      const parsedCatId = parseId(data.categoryId);
+      if (parsedCatId) {
+        const catExists = await prisma.category.findUnique({ where: { id: parsedCatId } });
+        validCategoryId = catExists ? parsedCatId : null;
+      } else {
+        validCategoryId = null;
+      }
+    }
+
+    let validSupplierId: number | null | undefined = undefined;
+    if (data.supplierId !== undefined) {
+      const parsedSupId = parseId(data.supplierId);
+      if (parsedSupId) {
+        const supExists = await prisma.supplier.findUnique({ where: { id: parsedSupId } });
+        validSupplierId = supExists ? parsedSupId : null;
+      } else {
+        validSupplierId = null;
+      }
+    }
+
+    let validUnitId: number | null | undefined = undefined;
+    if (data.unitId !== undefined) {
+      const parsedUnitId = parseId(data.unitId);
+      if (parsedUnitId) {
+        const unitExists = await prisma.unit.findUnique({ where: { id: parsedUnitId } });
+        validUnitId = unitExists ? parsedUnitId : null;
+      } else {
+        validUnitId = null;
+      }
+    }
+
+    const normalizedStatus = data.disabled !== undefined 
+      ? (data.disabled ? 'Inactive' : 'Active') 
+      : (data.status ? (String(data.status).toLowerCase() === 'inactive' ? 'Inactive' : 'Active') : undefined);
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -598,12 +686,12 @@ router.put('/:id', async (req: Request, res: Response) => {
         cost_price: data.cost_price !== undefined ? parseFloat(data.cost_price) : undefined,
         selling_price: data.selling_price !== undefined ? parseFloat(data.selling_price) : undefined,
         min_stock: data.min_stock !== undefined ? parseInt(data.min_stock) : undefined,
-        categoryId: data.categoryId,
-        supplierId: data.supplierId,
-        unitId: data.unitId || null,
+        categoryId: validCategoryId,
+        supplierId: validSupplierId,
+        unitId: validUnitId,
         invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : undefined,
         location: data.location,
-        status: data.disabled !== undefined ? (data.disabled ? 'Inactive' : 'Active') : data.status,
+        status: normalizedStatus as any,
 
         company: data.company,
         partOf: data.partOf,
@@ -675,8 +763,14 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'SKU must be unique', message: 'SKU must be unique' });
     }
+    if (error.code === 'P2003') {
+      return res.status(400).json({ error: 'Foreign key constraint failed', message: 'Referenced category, supplier, or unit does not exist.' });
+    }
     console.error('Failed to update product:', error);
-    res.status(500).json({ error: 'Failed to update product', message: 'Failed to update product' });
+    res.status(500).json({ 
+      error: 'Failed to update product', 
+      message: error?.message || 'Failed to update product' 
+    });
   }
 });
 
