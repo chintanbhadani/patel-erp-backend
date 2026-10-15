@@ -85,8 +85,9 @@ app.use('/api/production-orders', productionOrderRouter);
 app.use('/api/sticker-config', stickerConfigRouter);
 app.use('/api/weighment-ledger', weighmentLedgerRouter);
 
-// Start IoT Scale Listener (TCP Server on port 9000)
-setupIotScaleListener(io, 9000);
+// Start IoT Scale Listener (TCP Server)
+const IOT_SCALE_PORT = Number(process.env.IOT_SCALE_PORT) || 9000;
+setupIotScaleListener(io, IOT_SCALE_PORT);
 
 // Schedule Cron Job for 12 PM (noon) every day
 cron.schedule('0 12 * * *', async () => {
