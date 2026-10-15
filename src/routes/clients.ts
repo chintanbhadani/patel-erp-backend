@@ -1,10 +1,13 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorizeRole } from '../middleware/auth';
 import { logActivity } from '../services/activityLogger';
+import multer from 'multer';
+import * as xlsx from 'xlsx';
 
 const router = Router();
 const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Get all clients
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
@@ -251,6 +254,236 @@ router.delete('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res
   } catch (error: any) {
     console.error('Error deleting client:', error);
     res.status(500).json({ error: 'Failed to delete client' });
+  }
+});
+
+// Helper to parse boolean
+const parseBool = (val: any, def = false): boolean => {
+  if (val === undefined || val === null || val === '') return def;
+  if (typeof val === 'boolean') return val;
+  const s = String(val).toLowerCase().trim();
+  return s === 'true' || s === 'yes' || s === '1' || s === 'y';
+};
+
+// Helper to parse number
+const parseNum = (val: any, def = 0): number => {
+  if (val === undefined || val === null || val === '') return def;
+  const n = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? def : n;
+};
+
+// Bulk Process Customers Helper
+export async function processBulkClients(rows: any[], userId?: string): Promise<{
+  successCount: number;
+  createdCount: number;
+  updatedCount: number;
+  errors: string[];
+}> {
+  let successCount = 0;
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  // Verify that userId exists in User table to avoid Foreign Key violation on assignedRepId
+  let resolvedUserId: string | null = null;
+  if (userId) {
+    try {
+      const userExists = await prisma.user.findUnique({ where: { id: userId } });
+      if (userExists) {
+        resolvedUserId = userExists.id;
+      }
+    } catch (e) {
+      resolvedUserId = null;
+    }
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 2;
+
+    try {
+      const companyName = String(
+        row.companyName ||
+        row['Customer Name'] ||
+        row.customerName ||
+        row['Company Name'] ||
+        row.name ||
+        row.clientName ||
+        ''
+      ).trim();
+
+      if (!companyName) {
+        errors.push(`Row ${rowNum}: Customer Name is required`);
+        continue;
+      }
+
+      const gstNumber = row.gstNumber || row['GST Number'] || row.gst_number || row.GSTIN || row['GST No'] 
+        ? String(row.gstNumber || row['GST Number'] || row.gst_number || row.GSTIN || row['GST No']).trim() 
+        : null;
+      const taxId = row.taxId || row['Tax ID / PAN'] || row.tax_id || row.PAN 
+        ? String(row.taxId || row['Tax ID / PAN'] || row.tax_id || row.PAN).trim() 
+        : null;
+      const phone = row.phone || row['Phone / Contact'] || row.contact || row.Mobile 
+        ? String(row.phone || row['Phone / Contact'] || row.contact || row.Mobile).trim() 
+        : null;
+      const email = row.email || row.Email || row['Email Address'] 
+        ? String(row.email || row.Email || row['Email Address']).trim() 
+        : null;
+      const contactPersonName = row.contactPersonName || row['Contact Person'] || row.contactPerson 
+        ? String(row.contactPersonName || row['Contact Person'] || row.contactPerson).trim() 
+        : null;
+      const customerType = row.customerType || row['Customer Type'] || 'Company';
+      const customerGroup = row.customerGroup || row['Customer Group'] || 'Commercial';
+      const territory = row.territory || row.Territory || 'India';
+      const address = row.address || row.Address || row.Street 
+        ? String(row.address || row.Address || row.Street).trim() 
+        : null;
+      const city = row.city || row.City 
+        ? String(row.city || row.City).trim() 
+        : null;
+      const state = row.state || row.State 
+        ? String(row.state || row.State).trim() 
+        : null;
+      const postalCode = row.postalCode || row['Postal Code'] || row['Pin Code'] || row.pincode 
+        ? String(row.postalCode || row['Postal Code'] || row['Pin Code'] || row.pincode).trim() 
+        : null;
+      const country = row.country || row.Country || 'India';
+      const creditLimit = parseNum(row.creditLimit || row['Credit Limit'], 0);
+      const paymentTerms = row.paymentTerms || row['Payment Terms'] || 'Net 30';
+      const taxCategory = row.taxCategory || row['Tax Category'] || 'Standard Rate';
+      const disabled = parseBool(row.disabled || row.Disabled, false);
+
+      // Check if client already exists (match by gstNumber if present, or by companyName)
+      let existingClient = null;
+      if (gstNumber) {
+        existingClient = await prisma.client.findFirst({
+          where: { gstNumber: { equals: gstNumber, mode: 'insensitive' } }
+        });
+      }
+      if (!existingClient) {
+        existingClient = await prisma.client.findFirst({
+          where: { companyName: { equals: companyName, mode: 'insensitive' } }
+        });
+      }
+
+      if (existingClient) {
+        await prisma.client.update({
+          where: { id: existingClient.id },
+          data: {
+            companyName,
+            customerType,
+            customerGroup,
+            territory,
+            contactPersonName: contactPersonName || existingClient.contactPersonName,
+            phone: phone || existingClient.phone,
+            email: email || existingClient.email,
+            gstNumber: gstNumber || existingClient.gstNumber,
+            taxId: taxId || existingClient.taxId,
+            address: address || existingClient.address,
+            city: city || existingClient.city,
+            state: state || existingClient.state,
+            postalCode: postalCode || existingClient.postalCode,
+            country: country || existingClient.country,
+            creditLimit: creditLimit !== 0 ? creditLimit : existingClient.creditLimit,
+            paymentTerms: paymentTerms || existingClient.paymentTerms,
+            taxCategory: taxCategory || existingClient.taxCategory,
+            disabled
+          }
+        });
+        updatedCount++;
+      } else {
+        await prisma.client.create({
+          data: {
+            companyName,
+            customerType,
+            customerGroup,
+            territory,
+            contactPersonName,
+            phone,
+            email,
+            gstNumber,
+            taxId,
+            address,
+            city,
+            state,
+            postalCode,
+            country,
+            creditLimit,
+            paymentTerms,
+            taxCategory,
+            disabled,
+            assignedRepId: resolvedUserId
+          }
+        });
+        createdCount++;
+      }
+
+      successCount++;
+    } catch (err: any) {
+      errors.push(`Row ${rowNum}: ${err.message || 'Failed to process row'}`);
+    }
+  }
+
+  if (successCount > 0) {
+    try {
+      await logActivity({
+        entityType: 'Customer',
+        entityId: 'BULK',
+        action: 'BULK_IMPORT',
+        description: `Bulk imported ${successCount} customers (${createdCount} created, ${updatedCount} updated)`,
+        userId: resolvedUserId || undefined
+      });
+    } catch (logErr) {
+      console.warn('Failed to log bulk customer import activity', logErr);
+    }
+  }
+
+  return { successCount, createdCount, updatedCount, errors };
+}
+
+// POST bulk import (JSON array)
+router.post('/bulk-import', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req: Request, res: Response) => {
+  try {
+    const items = req.body.items || req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No customer records provided for import' });
+    }
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkClients(items, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} customers (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk import customers error:', error);
+    res.status(500).json({ error: 'Failed to process bulk import', message: error?.message });
+  }
+});
+
+// POST bulk upload (multipart Excel file)
+router.post('/bulk-upload', authorizeRole('PLANT_ADMIN', 'SALES_REP'), upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkClients(rows, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} customers (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk upload customers error:', error);
+    res.status(500).json({ error: 'Failed to process bulk upload', message: error?.message });
   }
 });
 

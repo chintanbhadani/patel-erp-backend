@@ -2,9 +2,12 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorizeRole } from '../middleware/auth';
 import { logActivity } from '../services/activityLogger';
+import multer from 'multer';
+import * as xlsx from 'xlsx';
 
 const router = Router();
 const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // GET all suppliers
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
@@ -179,6 +182,254 @@ router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Re
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete supplier' });
+  }
+});
+
+// Helper to parse boolean
+const parseBool = (val: any, def = false): boolean => {
+  if (val === undefined || val === null || val === '') return def;
+  if (typeof val === 'boolean') return val;
+  const s = String(val).toLowerCase().trim();
+  return s === 'true' || s === 'yes' || s === '1' || s === 'y';
+};
+
+// Helper to parse number
+const parseNum = (val: any, def = 0): number => {
+  if (val === undefined || val === null || val === '') return def;
+  const n = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? def : n;
+};
+
+// Bulk Process Suppliers Helper
+export async function processBulkSuppliers(rows: any[], userId?: string): Promise<{
+  successCount: number;
+  createdCount: number;
+  updatedCount: number;
+  errors: string[];
+}> {
+  let successCount = 0;
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  // Verify that userId exists in User table
+  let resolvedUserId: string | null = null;
+  if (userId) {
+    try {
+      const userExists = await prisma.user.findUnique({ where: { id: userId } });
+      if (userExists) {
+        resolvedUserId = userExists.id;
+      }
+    } catch {
+      resolvedUserId = null;
+    }
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 2;
+
+    try {
+      const name = String(
+        row.name ||
+        row['Supplier Name'] ||
+        row.supplierName ||
+        row['Company Name'] ||
+        row.companyName ||
+        row.supplier ||
+        ''
+      ).trim();
+
+      if (!name) {
+        errors.push(`Row ${rowNum}: Supplier Name is required`);
+        continue;
+      }
+
+      const contact = row.contact || row['Phone / Contact'] || row.phone || row.Mobile 
+        ? String(row.contact || row['Phone / Contact'] || row.phone || row.Mobile).trim() 
+        : null;
+      const email = row.email || row.Email || row['Email Address'] 
+        ? String(row.email || row.Email || row['Email Address']).trim() 
+        : null;
+      const supplierGroup = row.supplierGroup || row['Supplier Group'] || 'All Supplier Groups';
+      const country = row.country || row.Country || 'India';
+      const supplierType = row.supplierType || row['Supplier Type'] || 'Company';
+      const isTransporter = parseBool(row.isTransporter || row['Is Transporter'], false);
+      const contactPersonName = row.contactPersonName || row['Contact Person'] || null;
+      const billingCurrency = row.billingCurrency || row['Billing Currency'] || 'INR';
+      const priceList = row.priceList || row['Price List'] || 'Standard Buying';
+      const bankAccount = row.bankAccount || row['Bank Account'] || null;
+      const trackExchangeDifferences = parseBool(row.trackExchangeDifferences, true);
+      const taxId = row.taxId || row['Tax ID / GSTIN'] || row['Tax ID'] || row.GSTIN || row.GST 
+        ? String(row.taxId || row['Tax ID / GSTIN'] || row['Tax ID'] || row.GSTIN || row.GST).trim() 
+        : null;
+      const vrnNo = row.vrnNo || row['VRN / PAN'] || row.PAN || row.VRN 
+        ? String(row.vrnNo || row['VRN / PAN'] || row.PAN || row.VRN).trim() 
+        : null;
+      const address = row.address || row.Address || row.Street 
+        ? String(row.address || row.Address || row.Street).trim() 
+        : null;
+      const city = row.city || row.City 
+        ? String(row.city || row.City).trim() 
+        : null;
+      const state = row.state || row.State 
+        ? String(row.state || row.State).trim() 
+        : null;
+      const postalCode = row.postalCode || row['Postal Code'] || row['Pin Code'] || row.pincode 
+        ? String(row.postalCode || row['Postal Code'] || row['Pin Code'] || row.pincode).trim() 
+        : null;
+      const website = row.website || row.Website || null;
+      const payableAccount = row.payableAccount || row['Default Payable Account'] || 'Creditors - PS';
+      const paymentTerms = row.paymentTerms || row['Payment Terms'] || 'Net 30';
+      const creditLimit = parseNum(row.creditLimit || row['Credit Limit'], 0);
+      const disabled = parseBool(row.disabled || row.Disabled, false);
+      const assignedTo = row.assignedTo || row['Assigned To'] || 'Administrator';
+      const tags = row.tags || row.Tags || null;
+
+      // Check if supplier already exists (match by taxId if present, or by name)
+      let existingSupplier = null;
+      if (taxId) {
+        existingSupplier = await prisma.supplier.findFirst({
+          where: { taxId: { equals: taxId, mode: 'insensitive' } }
+        });
+      }
+      if (!existingSupplier) {
+        existingSupplier = await prisma.supplier.findFirst({
+          where: { name: { equals: name, mode: 'insensitive' } }
+        });
+      }
+
+      if (existingSupplier) {
+        await prisma.supplier.update({
+          where: { id: existingSupplier.id },
+          data: {
+            name,
+            contact: contact || existingSupplier.contact,
+            email: email || existingSupplier.email,
+            supplierGroup: supplierGroup || existingSupplier.supplierGroup,
+            country: country || existingSupplier.country,
+            supplierType: supplierType || existingSupplier.supplierType,
+            isTransporter,
+            contactPersonName: contactPersonName || existingSupplier.contactPersonName,
+            billingCurrency: billingCurrency || existingSupplier.billingCurrency,
+            priceList: priceList || existingSupplier.priceList,
+            bankAccount: bankAccount || existingSupplier.bankAccount,
+            trackExchangeDifferences,
+            taxId: taxId || existingSupplier.taxId,
+            vrnNo: vrnNo || existingSupplier.vrnNo,
+            address: address || existingSupplier.address,
+            city: city || existingSupplier.city,
+            state: state || existingSupplier.state,
+            postalCode: postalCode || existingSupplier.postalCode,
+            website: website || existingSupplier.website,
+            payableAccount: payableAccount || existingSupplier.payableAccount,
+            paymentTerms: paymentTerms || existingSupplier.paymentTerms,
+            creditLimit: creditLimit !== 0 ? creditLimit : existingSupplier.creditLimit,
+            disabled,
+            assignedTo: assignedTo || existingSupplier.assignedTo,
+            tags: tags || existingSupplier.tags
+          }
+        });
+        updatedCount++;
+      } else {
+        await prisma.supplier.create({
+          data: {
+            name,
+            contact,
+            email,
+            supplierGroup,
+            country,
+            supplierType,
+            isTransporter,
+            contactPersonName,
+            billingCurrency,
+            priceList,
+            bankAccount,
+            trackExchangeDifferences,
+            taxId,
+            vrnNo,
+            address,
+            city,
+            state,
+            postalCode,
+            website,
+            payableAccount,
+            paymentTerms,
+            creditLimit,
+            disabled,
+            assignedTo,
+            tags
+          }
+        });
+        createdCount++;
+      }
+
+      successCount++;
+    } catch (err: any) {
+      errors.push(`Row ${rowNum}: ${err.message || 'Failed to process row'}`);
+    }
+  }
+
+  if (successCount > 0) {
+    try {
+      await logActivity({
+        entityType: 'Supplier',
+        entityId: 'BULK',
+        action: 'BULK_IMPORT',
+        description: `Bulk imported ${successCount} suppliers (${createdCount} created, ${updatedCount} updated)`,
+        userId: resolvedUserId || undefined
+      });
+    } catch (logErr) {
+      console.warn('Failed to log bulk supplier import activity', logErr);
+    }
+  }
+
+  return { successCount, createdCount, updatedCount, errors };
+}
+
+// POST bulk import (JSON array)
+router.post('/bulk-import', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
+  try {
+    const items = req.body.items || req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No supplier records provided for import' });
+    }
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkSuppliers(items, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} suppliers (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk import suppliers error:', error);
+    res.status(500).json({ error: 'Failed to process bulk import', message: error?.message });
+  }
+});
+
+// POST bulk upload (multipart Excel file)
+router.post('/bulk-upload', authorizeRole('PLANT_ADMIN'), upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkSuppliers(rows, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} suppliers (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk upload suppliers error:', error);
+    res.status(500).json({ error: 'Failed to process bulk upload', message: error?.message });
   }
 });
 
