@@ -46,6 +46,8 @@ model User {
   role                    String            @default("Admin")
   status                  String            @default("Active")
   isBlock                 Boolean           @default(false)
+  twoFactorSecret         String?
+  isTwoFactorEnabled      Boolean           @default(false)
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
   jobs                    ProductionJob[]
