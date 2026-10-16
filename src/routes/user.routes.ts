@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { userRoles as INITIAL_USERS } from '../db/seederMasters';
+import { getUserMetadata, setUserMetadata, resetUserTwoFactorSecret } from '../services/userMetadataStore';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -108,6 +109,20 @@ router.get('/', async (req: Request, res: Response) => {
       result = result.filter(u => u.status === status);
     }
 
+    result = result.map(u => {
+      const meta = getUserMetadata(u.id);
+      const usernameMeta = getUserMetadata(u.username);
+      const twoFactorEnabled = meta.twoFactorEnabled !== undefined ? meta.twoFactorEnabled : (usernameMeta.twoFactorEnabled ?? true);
+      const isTwoFactorSetup = Boolean(meta.twoFactorSecret || usernameMeta.twoFactorSecret);
+      return {
+        ...u,
+        twoFactorEnabled,
+        isTwoFactorSetup,
+        imageUrl: meta.imageUrl || usernameMeta.imageUrl || u.imageUrl || '',
+        attachments: meta.attachments || usernameMeta.attachments || u.attachments || []
+      };
+    });
+
     res.json(result);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -148,7 +163,18 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const meta = getUserMetadata(user.id);
+    const usernameMeta = getUserMetadata(user.username);
+    const twoFactorEnabled = meta.twoFactorEnabled !== undefined ? meta.twoFactorEnabled : (usernameMeta.twoFactorEnabled ?? true);
+    const isTwoFactorSetup = Boolean(meta.twoFactorSecret || usernameMeta.twoFactorSecret);
+
+    res.json({
+      ...user,
+      twoFactorEnabled,
+      isTwoFactorSetup,
+      imageUrl: meta.imageUrl || usernameMeta.imageUrl || user.imageUrl || '',
+      attachments: meta.attachments || usernameMeta.attachments || user.attachments || []
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
@@ -168,7 +194,9 @@ router.post('/', async (req: Request, res: Response) => {
       password,
       role,
       status,
-      isBlock
+      isBlock,
+      imageUrl,
+      attachments
     } = req.body;
 
     if (!username) {
@@ -231,7 +259,20 @@ router.post('/', async (req: Request, res: Response) => {
       sampleUsers.unshift(newUser);
     }
 
-    res.status(201).json(newUser);
+    const twoFactorEnabled = req.body.twoFactorEnabled !== undefined ? Boolean(req.body.twoFactorEnabled) : true;
+    setUserMetadata(newUser.id, {
+      imageUrl: imageUrl || '',
+      attachments: attachments || [],
+      twoFactorEnabled
+    }, newUser.username);
+
+    res.status(201).json({
+      ...newUser,
+      twoFactorEnabled,
+      isTwoFactorSetup: false,
+      imageUrl: imageUrl || '',
+      attachments: attachments || []
+    });
   } catch (error: any) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: error.message || 'Failed to create user' });
@@ -253,7 +294,10 @@ router.put('/:id', async (req: Request, res: Response) => {
       password,
       role,
       status,
-      isBlock
+      isBlock,
+      imageUrl,
+      attachments,
+      twoFactorEnabled
     } = req.body;
 
     const userRole = Array.isArray(role) ? role.join(', ') : role;
@@ -319,7 +363,26 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(updatedUser);
+    if (imageUrl !== undefined || attachments !== undefined || twoFactorEnabled !== undefined) {
+      setUserMetadata(id, {
+        ...(imageUrl !== undefined && { imageUrl }),
+        ...(attachments !== undefined && { attachments }),
+        ...(twoFactorEnabled !== undefined && { twoFactorEnabled: Boolean(twoFactorEnabled) })
+      }, updatedUser.username);
+    }
+
+    const meta = getUserMetadata(id);
+    const usernameMeta = getUserMetadata(updatedUser.username);
+    const finalTwoFactor = meta.twoFactorEnabled !== undefined ? meta.twoFactorEnabled : (usernameMeta.twoFactorEnabled ?? true);
+    const isTwoFactorSetup = Boolean(meta.twoFactorSecret || usernameMeta.twoFactorSecret);
+
+    res.json({
+      ...updatedUser,
+      twoFactorEnabled: finalTwoFactor,
+      isTwoFactorSetup,
+      imageUrl: meta.imageUrl || usernameMeta.imageUrl || updatedUser.imageUrl || '',
+      attachments: meta.attachments || usernameMeta.attachments || updatedUser.attachments || []
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update user' });
   }
@@ -363,6 +426,62 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// POST /api/users/:id/reset-2fa
+router.post('/:id/reset-2fa', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let targetUser: any = null;
+
+    try {
+      targetUser = await prisma.user.findFirst({
+        where: {
+          OR: [{ id }, { username: id }]
+        }
+      });
+      if (targetUser) {
+        try {
+          await prisma.activityLog.create({
+            data: {
+              entityType: 'User',
+              entityId: targetUser.id,
+              action: 'UPDATE',
+              description: `Google Authenticator (2FA) reset for user ${targetUser.username}`
+            }
+          });
+        } catch (_) {}
+      }
+    } catch (e) {
+      targetUser = null;
+    }
+
+    const idx = sampleUsers.findIndex(u => u.id === id || u.username === id);
+    if (idx !== -1) {
+      sampleUsers[idx].twoFactorSecret = null;
+      sampleUsers[idx].twoFactorEnabled = true;
+      sampleUsers[idx].isTwoFactorSetup = false;
+      if (!targetUser) targetUser = sampleUsers[idx];
+    }
+
+    if (!targetUser && idx === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const targetId = targetUser?.id || id;
+    const username = targetUser?.username || id;
+    resetUserTwoFactorSecret(targetId, username);
+    if (id !== targetId) {
+      resetUserTwoFactorSecret(id, username);
+    }
+
+    res.json({
+      success: true,
+      message: `Google Authenticator (2FA) has been successfully reset for ${username}. On their next login, they will be prompted to scan a new QR code.`
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to reset Google Authenticator' });
   }
 });
 
