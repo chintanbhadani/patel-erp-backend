@@ -1,50 +1,53 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { roles as MASTER_ROLES } from '../db/seederMasters';
+import { roleStore } from '../services/roleStore';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-export interface RoleData {
-  id: string;
-  name: string;
-  code: string;
-  description: string;
-  status: 'Active' | 'Inactive';
-  userCount?: number;
-  createdAt?: string;
-  updatedAt?: string;
+// Helper to get user counts per role
+async function getRoleUserCounts(): Promise<Record<string, number>> {
+  try {
+    const users = await prisma.user.findMany({ select: { role: true } });
+    const counts: Record<string, number> = {};
+    users.forEach(u => {
+      if (u.role) {
+        counts[u.role] = (counts[u.role] || 0) + 1;
+        counts[u.role.toLowerCase()] = (counts[u.role.toLowerCase()] || 0) + 1;
+      }
+    });
+    return counts;
+  } catch (e) {
+    return {};
+  }
 }
 
-const INITIAL_ROLES: RoleData[] = MASTER_ROLES.map(r => ({
-  ...r,
-  id: String(r.id)
-}));
-
-let memoryRoles: RoleData[] = [...INITIAL_ROLES];
+// GET /api/roles/permissions-matrix (matches LIMS getRolePermissionsMatrix)
+router.get('/permissions-matrix', (req: Request, res: Response) => {
+  try {
+    const modulesWithPermissions = roleStore.getModulesWithPermissions();
+    res.json({
+      success: true,
+      data: {
+        modules: modulesWithPermissions
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching permissions matrix:', error);
+    res.status(500).json({ error: 'Failed to fetch permissions matrix' });
+  }
+});
 
 // GET /api/roles
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { search, status } = req.query;
+    const roleUserCounts = await getRoleUserCounts();
+    const allRoles = roleStore.getAllRoles();
 
-    let users: any[] = [];
-    try {
-      users = await prisma.user.findMany({ select: { role: true } });
-    } catch (e) {
-      users = [];
-    }
-
-    const roleUserCounts: Record<string, number> = {};
-    users.forEach(u => {
-      if (u.role) {
-        roleUserCounts[u.role] = (roleUserCounts[u.role] || 0) + 1;
-      }
-    });
-
-    let result = memoryRoles.map(r => ({
+    let result = allRoles.map(r => ({
       ...r,
-      userCount: roleUserCounts[r.name] || 1
+      userCount: roleUserCounts[r.name] || roleUserCounts[r.name.toLowerCase()] || 1
     }));
 
     if (search) {
@@ -61,39 +64,50 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching roles:', error);
     res.status(500).json({ error: 'Failed to fetch roles' });
   }
 });
 
 // GET /api/roles/:id
-router.get('/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const role = memoryRoles.find(r => r.id === id || r.code === id || r.name.toLowerCase() === id.toLowerCase());
-  if (!role) return res.status(404).json({ error: 'Role not found' });
-  res.json(role);
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const role = roleStore.getRoleById(id);
+    if (!role) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const roleUserCounts = await getRoleUserCounts();
+    res.json({
+      ...role,
+      userCount: roleUserCounts[role.name] || roleUserCounts[role.name.toLowerCase()] || 1
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch role' });
+  }
 });
 
 // POST /api/roles
 router.post('/', (req: Request, res: Response) => {
   try {
-    const { name, code, description, status } = req.body;
-    if (!name) return res.status(400).json({ error: 'Role name is required' });
+    const { name, code, description, status, permissionDetails } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Role name is required' });
+    }
 
-    const newRole: RoleData = {
-      id: `role-${Date.now()}`,
-      name,
-      code: code || name.toUpperCase().replace(/\s+/g, '_'),
-      description: description || '',
-      status: status || 'Active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const created = roleStore.createRole({
+      name: name.trim(),
+      code,
+      description,
+      status,
+      permissionDetails
+    });
 
-    memoryRoles.unshift(newRole);
-    res.status(201).json(newRole);
-  } catch (error) {
+    res.status(201).json(created);
+  } catch (error: any) {
+    console.error('Error creating role:', error);
     res.status(500).json({ error: 'Failed to create role' });
   }
 });
@@ -102,22 +116,23 @@ router.post('/', (req: Request, res: Response) => {
 router.put('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, code, description, status } = req.body;
+    const { name, code, description, status, permissionDetails } = req.body;
 
-    const idx = memoryRoles.findIndex(r => r.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Role not found' });
+    const updated = roleStore.updateRole(id, {
+      name,
+      code,
+      description,
+      status,
+      permissionDetails
+    });
 
-    memoryRoles[idx] = {
-      ...memoryRoles[idx],
-      ...(name && { name }),
-      ...(code && { code }),
-      ...(description !== undefined && { description }),
-      ...(status && { status }),
-      updatedAt: new Date().toISOString()
-    };
+    if (!updated) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
 
-    res.json(memoryRoles[idx]);
-  } catch (error) {
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating role:', error);
     res.status(500).json({ error: 'Failed to update role' });
   }
 });
@@ -126,9 +141,12 @@ router.put('/:id', (req: Request, res: Response) => {
 router.delete('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    memoryRoles = memoryRoles.filter(r => r.id !== id);
+    const success = roleStore.deleteRole(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Role not found or already deleted' });
+    }
     res.json({ message: 'Role deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: 'Failed to delete role' });
   }
 });
