@@ -248,3 +248,206 @@ export const subPartOfs: SubPartOfMaster[] = [
   { id: 3, name: 'MAIN STORE' }
 ];
 
+export interface ModuleMaster {
+  id: number;
+  name: string;
+  category?: string;
+}
+
+export interface PermissionMaster {
+  id: number;
+  modelId: number;
+  name: string;
+}
+
+export const modules: ModuleMaster[] = [
+  { id: 1, name: 'Dashboard', category: 'General' },
+  { id: 2, name: 'Production Orders', category: 'Production' },
+  { id: 3, name: 'Production Planning', category: 'Production' },
+  { id: 4, name: 'BOM (Bill of Materials)', category: 'Production' },
+  { id: 5, name: 'Production Weighing', category: 'Production' },
+  { id: 6, name: 'Stock Entries', category: 'Stock' },
+  { id: 7, name: 'Inventory Products', category: 'Stock' },
+  { id: 8, name: 'Material Requisition', category: 'Purchase' },
+  { id: 9, name: 'Purchase Orders', category: 'Purchase' },
+  { id: 10, name: 'Suppliers', category: 'Purchase' },
+  { id: 11, name: 'Goods Receipt Note (GRN)', category: 'Stock' },
+  { id: 12, name: 'Clients', category: 'CRM' },
+  { id: 13, name: 'Inquiries', category: 'CRM' },
+  { id: 14, name: 'Quotations', category: 'CRM' },
+  { id: 15, name: 'Proforma Invoices', category: 'Invoices' },
+  { id: 16, name: 'Tax Invoices', category: 'Invoices' },
+  { id: 17, name: 'Expenses', category: 'Finance' },
+  { id: 18, name: 'User Management', category: 'Administration' },
+  { id: 19, name: 'Role & Permissions', category: 'Administration' },
+  { id: 20, name: 'Master Data', category: 'Settings' },
+  { id: 21, name: 'Sticker Code Config', category: 'Settings' },
+  { id: 22, name: 'Weighment Ledger', category: 'Reports' },
+  { id: 23, name: 'User Audit Logs', category: 'Administration' },
+  { id: 24, name: 'Database Backup', category: 'Settings' }
+];
+
+export const permissions: PermissionMaster[] = [
+  // 1. Dashboard
+  { id: 1, modelId: 1, name: 'View Dashboard' },
+  { id: 2, modelId: 1, name: 'Export Analytics' },
+
+  // 2. Production Orders
+  { id: 3, modelId: 2, name: 'List' },
+  { id: 4, modelId: 2, name: 'Add' },
+  { id: 5, modelId: 2, name: 'Edit' },
+  { id: 6, modelId: 2, name: 'Delete' },
+  { id: 7, modelId: 2, name: 'Issue' },
+  { id: 8, modelId: 2, name: 'Export Data' },
+
+  // 3. Production Planning
+  { id: 9, modelId: 3, name: 'List' },
+  { id: 10, modelId: 3, name: 'Add' },
+  { id: 11, modelId: 3, name: 'Edit' },
+  { id: 12, modelId: 3, name: 'Delete' },
+  { id: 13, modelId: 3, name: 'Export Data' },
+
+  // 4. BOM (Bill of Materials)
+  { id: 14, modelId: 4, name: 'List' },
+  { id: 15, modelId: 4, name: 'Add' },
+  { id: 16, modelId: 4, name: 'Edit' },
+  { id: 17, modelId: 4, name: 'Delete' },
+  { id: 18, modelId: 4, name: 'Export Data' },
+
+  // 5. Production Weighing
+  { id: 19, modelId: 5, name: 'List' },
+  { id: 20, modelId: 5, name: 'Add' },
+  { id: 21, modelId: 5, name: 'Edit' },
+  { id: 22, modelId: 5, name: 'Export Data' },
+
+  // 6. Stock Entries
+  { id: 23, modelId: 6, name: 'List' },
+  { id: 24, modelId: 6, name: 'Add' },
+  { id: 25, modelId: 6, name: 'Edit' },
+  { id: 26, modelId: 6, name: 'Issue' },
+  { id: 27, modelId: 6, name: 'Export Data' },
+
+  // 7. Inventory Products
+  { id: 28, modelId: 7, name: 'List' },
+  { id: 29, modelId: 7, name: 'Add' },
+  { id: 30, modelId: 7, name: 'Edit' },
+  { id: 31, modelId: 7, name: 'Delete' },
+  { id: 32, modelId: 7, name: 'Export Data' },
+
+  // 8. Material Requisition
+  { id: 33, modelId: 8, name: 'List' },
+  { id: 34, modelId: 8, name: 'Add' },
+  { id: 35, modelId: 8, name: 'Edit' },
+  { id: 36, modelId: 8, name: 'Delete' },
+  { id: 37, modelId: 8, name: 'Approve' },
+  { id: 38, modelId: 8, name: 'Export Data' },
+
+  // 9. Purchase Orders
+  { id: 39, modelId: 9, name: 'List' },
+  { id: 40, modelId: 9, name: 'Add' },
+  { id: 41, modelId: 9, name: 'Edit' },
+  { id: 42, modelId: 9, name: 'Delete' },
+  { id: 43, modelId: 9, name: 'Approve' },
+  { id: 44, modelId: 9, name: 'Export Data' },
+
+  // 10. Suppliers
+  { id: 45, modelId: 10, name: 'List' },
+  { id: 46, modelId: 10, name: 'Add' },
+  { id: 47, modelId: 10, name: 'Edit' },
+  { id: 48, modelId: 10, name: 'Delete' },
+  { id: 49, modelId: 10, name: 'Export Data' },
+
+  // 11. Goods Receipt Note (GRN)
+  { id: 50, modelId: 11, name: 'List' },
+  { id: 51, modelId: 11, name: 'Add' },
+  { id: 52, modelId: 11, name: 'Edit' },
+  { id: 53, modelId: 11, name: 'Issue' },
+  { id: 54, modelId: 11, name: 'Export Data' },
+
+  // 12. Clients
+  { id: 55, modelId: 12, name: 'List' },
+  { id: 56, modelId: 12, name: 'Add' },
+  { id: 57, modelId: 12, name: 'Edit' },
+  { id: 58, modelId: 12, name: 'Delete' },
+  { id: 59, modelId: 12, name: 'Export Data' },
+
+  // 13. Inquiries
+  { id: 60, modelId: 13, name: 'List' },
+  { id: 61, modelId: 13, name: 'Add' },
+  { id: 62, modelId: 13, name: 'Edit' },
+  { id: 63, modelId: 13, name: 'Delete' },
+  { id: 64, modelId: 13, name: 'Export Data' },
+
+  // 14. Quotations
+  { id: 65, modelId: 14, name: 'List' },
+  { id: 66, modelId: 14, name: 'Add' },
+  { id: 67, modelId: 14, name: 'Edit' },
+  { id: 68, modelId: 14, name: 'Delete' },
+  { id: 69, modelId: 14, name: 'Export Data' },
+
+  // 15. Proforma Invoices
+  { id: 70, modelId: 15, name: 'List' },
+  { id: 71, modelId: 15, name: 'Add' },
+  { id: 72, modelId: 15, name: 'Edit' },
+  { id: 73, modelId: 15, name: 'Delete' },
+  { id: 74, modelId: 15, name: 'Export Data' },
+
+  // 16. Tax Invoices
+  { id: 75, modelId: 16, name: 'List' },
+  { id: 76, modelId: 16, name: 'Add' },
+  { id: 77, modelId: 16, name: 'Edit' },
+  { id: 78, modelId: 16, name: 'Delete' },
+  { id: 79, modelId: 16, name: 'Export Data' },
+
+  // 17. Expenses
+  { id: 80, modelId: 17, name: 'List' },
+  { id: 81, modelId: 17, name: 'Add' },
+  { id: 82, modelId: 17, name: 'Edit' },
+  { id: 83, modelId: 17, name: 'Delete' },
+  { id: 84, modelId: 17, name: 'Approve' },
+  { id: 85, modelId: 17, name: 'Export Data' },
+
+  // 18. User Management
+  { id: 86, modelId: 18, name: 'List' },
+  { id: 87, modelId: 18, name: 'Add' },
+  { id: 88, modelId: 18, name: 'Edit' },
+  { id: 89, modelId: 18, name: 'Delete' },
+  { id: 90, modelId: 18, name: 'Generate Password' },
+  { id: 91, modelId: 18, name: 'Reset 2FA' },
+  { id: 92, modelId: 18, name: 'Export Data' },
+
+  // 19. Role & Permissions
+  { id: 93, modelId: 19, name: 'List' },
+  { id: 94, modelId: 19, name: 'Add' },
+  { id: 95, modelId: 19, name: 'Edit' },
+  { id: 96, modelId: 19, name: 'Delete' },
+  { id: 97, modelId: 19, name: 'Export Data' },
+
+  // 20. Master Data
+  { id: 98, modelId: 20, name: 'List' },
+  { id: 99, modelId: 20, name: 'Add' },
+  { id: 100, modelId: 20, name: 'Edit' },
+  { id: 101, modelId: 20, name: 'Delete' },
+  { id: 102, modelId: 20, name: 'Export Data' },
+
+  // 21. Sticker Code Config
+  { id: 103, modelId: 21, name: 'List' },
+  { id: 104, modelId: 21, name: 'Add' },
+  { id: 105, modelId: 21, name: 'Edit' },
+  { id: 106, modelId: 21, name: 'Delete' },
+
+  // 22. Weighment Ledger
+  { id: 107, modelId: 22, name: 'List' },
+  { id: 108, modelId: 22, name: 'Export Data' },
+
+  // 23. User Audit Logs
+  { id: 109, modelId: 23, name: 'List' },
+  { id: 110, modelId: 23, name: 'Export Data' },
+
+  // 24. Database Backup
+  { id: 111, modelId: 24, name: 'List' },
+  { id: 112, modelId: 24, name: 'Create Backup' },
+  { id: 113, modelId: 24, name: 'Download' },
+  { id: 114, modelId: 24, name: 'Restore' }
+];
+

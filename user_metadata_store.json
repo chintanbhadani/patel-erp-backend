@@ -1,0 +1,16 @@
+{
+  "997d038c-501a-4bf4-a46d-f3f976df599e": {
+    "twoFactorEnabled": true,
+    "twoFactorSecret": "K2UVL6Q5YWB73LIK6AUE3UWXK2SLNPSM",
+    "isTwoFactorSetup": true,
+    "imageUrl": "http://localhost:8005/api/upload/file/uploads/1792402337641-Admin.webp",
+    "attachments": []
+  },
+  "admin": {
+    "twoFactorEnabled": true,
+    "twoFactorSecret": "K2UVL6Q5YWB73LIK6AUE3UWXK2SLNPSM",
+    "isTwoFactorSetup": true,
+    "imageUrl": "http://localhost:8005/api/upload/file/uploads/1792402337641-Admin.webp",
+    "attachments": []
+  }
+}

@@ -259,25 +259,44 @@ router.put('/:id', async (req: Request, res: Response) => {
     const userRole = Array.isArray(role) ? role.join(', ') : role;
 
     let updatedUser: any = null;
-    try {
-      const updateData: any = {};
-      if (employeeId !== undefined) updateData.employeeId = employeeId;
-      if (username !== undefined) updateData.username = username;
-      if (fullName !== undefined) updateData.fullName = fullName;
-      if (firstName !== undefined) updateData.firstName = firstName;
-      if (lastName !== undefined) updateData.lastName = lastName;
-      if (email !== undefined) updateData.email = email;
-      if (contactNumber !== undefined) updateData.contactNumber = contactNumber;
-      if (userRole !== undefined) updateData.role = userRole;
-      if (status !== undefined) updateData.status = status;
-      if (isBlock !== undefined) updateData.isBlock = isBlock;
 
-      if (password) {
-        updateData.password = await bcrypt.hash(password, 10);
-      }
+    // 1. Find user in Prisma database by id, username, or employeeId
+    let existingUser = await prisma.user.findUnique({ where: { id } }).catch(() => null);
+    if (!existingUser) {
+      existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { id },
+            { username: id },
+            { employeeId: id }
+          ]
+        }
+      }).catch(() => null);
+    }
 
+    const updateData: any = {};
+    if (employeeId !== undefined) updateData.employeeId = employeeId;
+    if (username !== undefined) updateData.username = username;
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (email !== undefined) updateData.email = email;
+    if (contactNumber !== undefined) updateData.contactNumber = contactNumber;
+    if (userRole !== undefined) updateData.role = userRole;
+    if (status !== undefined) updateData.status = status;
+    if (isBlock !== undefined) updateData.isBlock = isBlock;
+
+    // Always securely bcrypt hash the password if provided
+    if (password && String(password).trim()) {
+      const cleanPass = String(password).trim();
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(cleanPass, salt);
+      console.log(`[User Security] Securely hashed and stored password in DB for user ${username || id}`);
+    }
+
+    if (existingUser) {
       updatedUser = await prisma.user.update({
-        where: { id },
+        where: { id: existingUser.id },
         data: updateData,
         select: {
           id: true,
@@ -295,24 +314,64 @@ router.put('/:id', async (req: Request, res: Response) => {
           updatedAt: true
         }
       });
-    } catch (err) {
-      console.warn('DB update user failed, checking sample store:', err);
-      const idx = sampleUsers.findIndex(u => u.id === id || u.username === id);
-      if (idx !== -1) {
-        sampleUsers[idx] = {
-          ...sampleUsers[idx],
-          ...(employeeId && { employeeId }),
-          ...(username && { username }),
-          ...(fullName && { fullName }),
-          ...(email && { email }),
-          ...(contactNumber && { contactNumber }),
-          ...(userRole && { role: userRole }),
-          ...(status && { status }),
-          ...(isBlock !== undefined && { isBlock }),
-          updatedAt: new Date().toISOString()
-        };
-        updatedUser = sampleUsers[idx];
+    } else {
+      // If user was not yet in Prisma, create directly in Prisma DB with hashed password
+      const defaultPass = (password && String(password).trim()) || 'admin123';
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(defaultPass, salt);
+
+      try {
+        updatedUser = await prisma.user.create({
+          data: {
+            employeeId: employeeId || `E00${Math.floor(1000 + Math.random() * 9000)}`,
+            username: username || id,
+            fullName: fullName || `${firstName || ''} ${lastName || ''}`.trim() || username || id,
+            firstName: firstName || '',
+            lastName: lastName || '',
+            email: email || '',
+            contactNumber: contactNumber || '',
+            password: hashedPassword,
+            role: userRole || 'Admin',
+            status: status || 'Active',
+            isBlock: Boolean(isBlock)
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            username: true,
+            fullName: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            contactNumber: true,
+            role: true,
+            status: true,
+            isBlock: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+      } catch (createErr) {
+        console.warn('Prisma create user on update fallback failed:', createErr);
       }
+    }
+
+    // Sync memory store
+    const idx = sampleUsers.findIndex(u => u.id === id || u.username === id || (existingUser && u.id === existingUser.id));
+    if (idx !== -1) {
+      sampleUsers[idx] = {
+        ...sampleUsers[idx],
+        ...(employeeId && { employeeId }),
+        ...(username && { username }),
+        ...(fullName && { fullName }),
+        ...(email && { email }),
+        ...(contactNumber && { contactNumber }),
+        ...(userRole && { role: userRole }),
+        ...(status && { status }),
+        ...(isBlock !== undefined && { isBlock }),
+        updatedAt: new Date().toISOString()
+      };
+      if (!updatedUser) updatedUser = sampleUsers[idx];
     }
 
     if (!updatedUser) {
@@ -322,6 +381,43 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(updatedUser);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update user' });
+  }
+});
+
+// POST /api/users/:id/change-password
+router.post('/:id/change-password', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { newPassword, password } = req.body;
+    const pass = newPassword || password;
+
+    if (!pass || String(pass).trim().length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const cleanPass = String(pass).trim();
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(cleanPass, salt);
+
+    let targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ id }, { username: id }, { employeeId: id }]
+      }
+    });
+
+    if (targetUser) {
+      await prisma.user.update({
+        where: { id: targetUser.id },
+        data: { password: hashedPassword }
+      });
+      console.log(`[User Security] Password explicitly changed and hashed in DB for ${targetUser.username} (${targetUser.id})`);
+      return res.json({ success: true, message: `Password for ${targetUser.username} successfully updated and hashed in database.` });
+    }
+
+    res.status(404).json({ error: 'User not found' });
+  } catch (error: any) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: error.message || 'Failed to change password' });
   }
 });
 
