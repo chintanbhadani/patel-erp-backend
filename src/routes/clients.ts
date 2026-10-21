@@ -46,7 +46,15 @@ router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) =
       where: { id },
       include: {
         assignedRep: { select: { id: true, username: true, role: true } },
-        inquiries: true
+        inquiries: true,
+        _count: {
+          select: {
+            productionOrders: true,
+            invoices: true,
+            payments: true,
+            inquiries: true
+          }
+        }
       }
     });
     if (!client) {
