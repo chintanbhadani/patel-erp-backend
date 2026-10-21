@@ -816,7 +816,7 @@ export async function processBulkProductItems(rows: any[]): Promise<{ successCou
       const rollWidth = parseFloat(row.rollWidth || row['Roll Width'] || row['Width'] || 0) || 0;
       const rollCoreLength = parseFloat(row.rollCoreLength || row['Roll Core Length'] || row['Core Length'] || 0) || 0;
       const rollCoreDiameter = parseFloat(row.rollCoreDiameter || row['Roll Core Diameter'] || row['Core Diameter'] || 0) || 0;
-      const rollDiaSize = parseFloat(row.rollDiaSize || row['Roll Dia Size'] || row['Dia Size'] || 0) || 0;
+      const rollDiaSize = parseFloat(row.rollDiaSize || row['Roll Die Size'] || row['Die Size'] || 0) || 0;
       const rollWeight = parseFloat(row.rollWeight || row['Roll Weight'] || row['Weight'] || 0) || 0;
 
       const rawSurface = String(row.rollSurface || row['Roll Surface'] || row['Surface'] || '').trim();
