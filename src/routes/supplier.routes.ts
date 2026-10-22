@@ -40,7 +40,17 @@ router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR')
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const supplier = await prisma.supplier.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            grns: true,
+            purchaseOrders: true,
+            invoices: true,
+            payments: true
+          }
+        }
+      }
     });
     if (!supplier) {
       return res.status(404).json({ error: 'Supplier not found' });

@@ -116,6 +116,23 @@ router.post('/descriptions', authorizeRole('PLANT_ADMIN'), async (req: Request, 
   }
 });
 
+// GET single expense by id
+router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const expense = await prisma.expense.findUnique({
+      where: { id },
+    });
+    if (!expense) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+    res.json(expense);
+  } catch (error) {
+    console.error('Error fetching expense by id:', error);
+    res.status(500).json({ error: 'Failed to fetch expense' });
+  }
+});
+
 // POST new expense
 router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
