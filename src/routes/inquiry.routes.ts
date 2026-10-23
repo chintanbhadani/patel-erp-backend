@@ -121,10 +121,11 @@ router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req: Request,
     });
 
     await logActivity({
-      userId: (req as any).user?.id || 'SYSTEM',
+      entityType: 'Inquiry',
+      entityId: String(inquiry.id),
       action: 'CREATE',
-      module: 'CRM',
-      details: `Created new inquiry ${inquiry.id} for client ID ${targetClientId}`
+      description: `Created new inquiry ${inquiry.id} for client ID ${targetClientId}`,
+      userId: (req as any).user?.id
     });
 
     res.status(201).json(inquiry);
@@ -155,10 +156,11 @@ router.put('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req: Reques
     });
 
     await logActivity({
-      userId: (req as any).user?.id || 'SYSTEM',
+      entityType: 'Inquiry',
+      entityId: String(id),
       action: 'UPDATE',
-      module: 'CRM',
-      details: `Updated inquiry ${id}`
+      description: `Updated inquiry ${id}`,
+      userId: (req as any).user?.id
     });
 
     res.json(inquiry);
@@ -175,10 +177,11 @@ router.delete('/:id', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Re
     await prisma.inquiry.delete({ where: { id } });
 
     await logActivity({
-      userId: (req as any).user?.id || 'SYSTEM',
+      entityType: 'Inquiry',
+      entityId: String(id),
       action: 'DELETE',
-      module: 'CRM',
-      details: `Deleted inquiry ${id}`
+      description: `Deleted inquiry ${id}`,
+      userId: (req as any).user?.id
     });
 
     res.json({ message: 'Inquiry deleted successfully' });
