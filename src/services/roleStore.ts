@@ -185,3 +185,88 @@ export const roleStore = {
     return false;
   }
 };
+
+export function getUserRoleDetails(user: { id: string | number; role?: string; createdAt?: Date | string }): {
+  id: string | number;
+  name: string;
+  code: string;
+  roles: any[];
+  permissionsDetails: Array<{
+    moduleId: number;
+    moduleName: string;
+    permissions: Array<{ id: number; name: string }>;
+  }>;
+} {
+  const allRoles = roleStore.getAllRoles();
+  const userRoleStr = (user.role || 'Admin').trim();
+
+  // Find matching role in roleStore by name, code, or ID
+  let matchedRole = allRoles.find(
+    r => r.name.toLowerCase() === userRoleStr.toLowerCase() ||
+         r.code.toLowerCase() === userRoleStr.toLowerCase() ||
+         String(r.id) === userRoleStr
+  );
+
+  if (!matchedRole) {
+    matchedRole = allRoles.find(r => r.name.toLowerCase() === 'admin' || r.code.toUpperCase() === 'ADMIN') || allRoles[0];
+  }
+
+  const isSuperAdmin = matchedRole.name.toLowerCase() === 'admin' || matchedRole.code.toUpperCase() === 'ADMIN';
+
+  let permissionsDetails: Array<{
+    moduleId: number;
+    moduleName: string;
+    permissions: Array<{ id: number; name: string }>;
+  }> = [];
+
+  const rolePerms = matchedRole.permissionDetails;
+
+  if (Array.isArray(rolePerms) && rolePerms.length > 0) {
+    // Use the role's saved permissions configuration from roles_store.json
+    permissionsDetails = rolePerms.map(item => {
+      const mod = SEED_MODULES.find(m => m.id === item.module);
+      const perms = (item.permissions || [])
+        .map(pId => SEED_PERMISSIONS.find(p => p.id === pId))
+        .filter((p): p is PermissionMaster => Boolean(p))
+        .map(p => ({ id: p.id, name: p.name }));
+
+      return {
+        moduleId: item.module,
+        moduleName: mod ? mod.name : `Module ${item.module}`,
+        permissions: perms
+      };
+    }).filter(mp => mp.permissions.length > 0);
+  } else if (isSuperAdmin) {
+    // SuperAdmin fallback if no permissions configured yet
+    permissionsDetails = SEED_MODULES.map(m => ({
+      moduleId: m.id,
+      moduleName: m.name,
+      permissions: SEED_PERMISSIONS
+        .filter(p => p.modelId === m.id)
+        .map(p => ({ id: p.id, name: p.name }))
+    }));
+  }
+
+  const roleIdNum = Number(matchedRole.id) || 1;
+
+  return {
+    id: matchedRole.id,
+    name: matchedRole.name,
+    code: matchedRole.code,
+    roles: [
+      {
+        id: 1,
+        userId: user.id,
+        roleId: roleIdNum,
+        createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : new Date().toISOString(),
+        deletedAt: null,
+        role: {
+          id: roleIdNum,
+          name: matchedRole.name
+        }
+      }
+    ],
+    permissionsDetails
+  };
+}
+
