@@ -1,6 +1,8 @@
+import fs from 'fs';
+import path from 'path';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authorizeRole } from '../middleware/auth';
+import { authorizeRole, authenticateToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { generateSecret, generateURI, verifySync } from 'otplib';
@@ -123,7 +125,7 @@ router.post('/verify-2fa', async (req, res) => {
     }
 
     if (decoded.purpose === '2FA_SETUP') {
-      const result = verifySync({ token: cleanCode, secret: decoded.tempSecret });
+      const result = verifySync({ token: cleanCode, secret: decoded.tempSecret, epochTolerance: 60 });
       if (!result?.valid) {
         return res.status(400).json({ error: 'Invalid Google Authenticator code. Please check and try again.' });
       }
@@ -137,12 +139,44 @@ router.post('/verify-2fa', async (req, res) => {
         }
       });
     } else if (decoded.purpose === '2FA_VERIFY') {
-      if (!user.twoFactorSecret) {
-        return res.status(400).json({ error: '2FA is not properly configured. Please contact administrator.' });
+      let isValid = false;
+
+      // 1. Check primary DB secret with 60s tolerance (+/- 2 windows)
+      if (user.twoFactorSecret) {
+        const result = verifySync({ token: cleanCode, secret: user.twoFactorSecret, epochTolerance: 60 });
+        if (result?.valid) {
+          isValid = true;
+        }
       }
 
-      const result = verifySync({ token: cleanCode, secret: user.twoFactorSecret });
-      if (!result?.valid) {
+      // 2. Check user_metadata_store.json if DB secret did not match
+      if (!isValid) {
+        try {
+          const metaPath = path.resolve(__dirname, '../../user_metadata_store.json');
+          if (fs.existsSync(metaPath)) {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+            const fallbackSecret = meta[user.id]?.twoFactorSecret || meta[user.username]?.twoFactorSecret;
+            if (fallbackSecret && fallbackSecret !== user.twoFactorSecret) {
+              const fallbackResult = verifySync({ token: cleanCode, secret: fallbackSecret, epochTolerance: 60 });
+              if (fallbackResult?.valid) {
+                isValid = true;
+                // Automatically sync to DB so future logins succeed directly
+                await prisma.user.update({
+                  where: { id: user.id },
+                  data: {
+                    twoFactorSecret: fallbackSecret,
+                    isTwoFactorEnabled: true
+                  }
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Metadata store check error:', e);
+        }
+      }
+
+      if (!isValid) {
         return res.status(400).json({ error: 'Invalid Google Authenticator code. Please check and try again.' });
       }
     } else {
@@ -178,7 +212,7 @@ router.post('/verify-2fa', async (req, res) => {
   }
 });
 
-// Admin reset 2FA for a user
+// Reset 2FA for a user (by userId)
 router.post('/reset-2fa/:userId', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR', 'Admin'), async (req, res) => {
   try {
     const { userId } = req.params;
@@ -195,8 +229,58 @@ router.post('/reset-2fa/:userId', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR
   }
 });
 
+// Self-service reset 2FA using username & password
+router.post('/reset-my-2fa', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const cleanUsername = String(username).trim();
+    let user = await prisma.user.findUnique({ where: { username: cleanUsername } });
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: { username: { equals: cleanUsername, mode: 'insensitive' } }
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(String(password).trim(), user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorSecret: null,
+        isTwoFactorEnabled: false
+      }
+    });
+
+    // Also clean up metadata store entry if exists
+    try {
+      const metaPath = path.resolve(__dirname, '../../user_metadata_store.json');
+      if (fs.existsSync(metaPath)) {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+        delete meta[user.id];
+        delete meta[user.username];
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+      }
+    } catch (e) {}
+
+    res.json({ success: true, message: '2FA has been reset. Please log in again to scan your new QR code.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset 2FA' });
+  }
+});
+
 // Get Current User Profile
-router.get('/me', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR', 'QC_INSPECTOR', 'SALES_REP'), async (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).user.id;
     
@@ -223,7 +307,7 @@ router.get('/me', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR', 'QC_INSPECTOR
 });
 
 // Update Current User Profile
-router.put('/me', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR', 'QC_INSPECTOR', 'SALES_REP'), async (req, res) => {
+router.put('/me', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const { username, password } = req.body;
