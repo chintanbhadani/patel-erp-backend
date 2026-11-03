@@ -46,8 +46,8 @@ model User {
   role                    String            @default("Admin")
   status                  String            @default("Active")
   isBlock                 Boolean           @default(false)
-  twoFactorSecret         String?
   isTwoFactorEnabled      Boolean           @default(false)
+  twoFactorSecret         String?
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
   jobs                    ProductionJob[]
@@ -739,5 +739,40 @@ model WeighmentLedgerEntry {
   notes              String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model Transporter {
+  id              Int       @id @default(autoincrement())
+  name            String
+  gstin           String?
+  transporterId   String?
+  phone           String?
+  email           String?
+  contactPerson   String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  modeOfTransport String?   @default("Road")
+  vehicleTypes    String?
+  freightTerms    String?   @default("To Pay")
+  trackingUrl     String?
+  imageUrl        String?
+  disabled        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+}
+
+model MachineMaster {
+  id                      Int      @id @default(autoincrement())
+  code                    String   @unique
+  name                    String   @unique
+  outputKgPerHour         Float    @default(300)
+  status                  String   @default("Running")
+  maxCapacityTonsPerMonth Float?   @default(20)
+  remarks                 String?
+  disabled                Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @default(now()) @updatedAt
 }
 

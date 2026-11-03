@@ -31,6 +31,8 @@ import productionOrderRouter from './routes/productionOrder.routes';
 import stickerConfigRouter from './routes/stickerCodeConfig.routes';
 import weighmentLedgerRouter from './routes/weighmentLedger.routes';
 import inquiryRouter from './routes/inquiry.routes';
+import transporterRouter from './routes/transporter.routes';
+import machineRouter from './routes/machine.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -86,6 +88,8 @@ app.use('/api/production-orders', productionOrderRouter);
 app.use('/api/sticker-config', stickerConfigRouter);
 app.use('/api/weighment-ledger', weighmentLedgerRouter);
 app.use('/api/inquiries', inquiryRouter);
+app.use('/api/transporters', transporterRouter);
+app.use('/api/machines', machineRouter);
 
 // Start IoT Scale Listener (TCP Server)
 const IOT_SCALE_PORT = Number(process.env.IOT_SCALE_PORT) || 9000;

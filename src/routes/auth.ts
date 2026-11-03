@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { generateSecret, generateURI, verifySync } from 'otplib';
 import QRCode from 'qrcode';
+import { getUserRoleDetails } from '../services/roleStore';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -155,10 +156,21 @@ router.post('/verify-2fa', async (req, res) => {
       { expiresIn: '1d' }
     );
 
+    const roleDetails = getUserRoleDetails(user);
+
     res.json({
-      user: { id: user.id, username: user.username, role: user.role },
+      status: 200,
+      success: true,
+      message: 'Login successfully',
+      roleDetails,
       token,
-      message: 'Login successful'
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        fullName: user.fullName || user.username,
+        email: user.email
+      }
     });
   } catch (error) {
     console.error('2FA verification route error:', error);
@@ -190,16 +202,21 @@ router.get('/me', authorizeRole('PLANT_ADMIN', 'SHIFT_SUPERVISOR', 'QC_INSPECTOR
     
     // Dev fallback handling
     if (userId === 'dev-user') {
-      return res.json({ id: 'dev-user', username: 'dev', role: 'PLANT_ADMIN' });
+      const devRole = getUserRoleDetails({ id: 'dev-user', role: 'Admin' });
+      return res.json({ id: 'dev-user', username: 'dev', role: 'PLANT_ADMIN', roleDetails: devRole });
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, username: true, role: true }
+      select: { id: true, username: true, role: true, fullName: true, email: true, createdAt: true }
     });
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const roleDetails = getUserRoleDetails(user);
+    res.json({
+      ...user,
+      roleDetails
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
