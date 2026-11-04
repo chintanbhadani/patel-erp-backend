@@ -526,11 +526,13 @@ router.post('/', async (req: Request, res: Response) => {
 
     const normalizedStatus = (data.disabled ? 'Inactive' : (data.status || 'Active')).toLowerCase() === 'inactive' ? 'Inactive' : 'Active';
 
+    const initialQty = parseInt(data.quantity || data.openingStock || data.opening_stock || 0, 10) || 0;
+
     const product = await prisma.product.create({
       data: {
         sku: finalSku,
         name: data.name,
-        quantity: 0,
+        quantity: initialQty,
         cost_price: parseFloat(data.cost_price) || 0,
         selling_price: parseFloat(data.selling_price) || 0,
         min_stock: parseInt(data.min_stock) || 0,
@@ -590,6 +592,23 @@ router.post('/', async (req: Request, res: Response) => {
       });
     } catch (e) {
       console.error('Failed to sync SkuMaster on product create:', e);
+    }
+
+    // Automatically create OPENING_STOCK voucher in StockLedger if opening quantity > 0
+    if (initialQty > 0) {
+      try {
+        await prisma.stockLedger.create({
+          data: {
+            productId: product.id,
+            date: new Date(),
+            type: 'OPENING_STOCK',
+            quantityChange: initialQty,
+            runningBalance: initialQty
+          }
+        });
+      } catch (ledgerErr) {
+        console.error('Failed to create opening stock ledger entry on product create:', ledgerErr);
+      }
     }
 
     // Log Activity in DB
@@ -967,13 +986,30 @@ export async function processBulkProductItems(rows: any[]): Promise<{ successCou
         });
         updatedCount++;
       } else {
-        await prisma.product.create({
+        const createdProduct = await prisma.product.create({
           data: {
             sku,
             ...productData
           }
         });
         createdCount++;
+
+        // Automatically create OPENING_STOCK voucher in StockLedger if opening quantity > 0
+        if (quantity > 0) {
+          try {
+            await prisma.stockLedger.create({
+              data: {
+                productId: createdProduct.id,
+                date: new Date(),
+                type: 'OPENING_STOCK',
+                quantityChange: quantity,
+                runningBalance: quantity
+              }
+            });
+          } catch (ledgerErr) {
+            console.error('Failed to create opening stock ledger entry on bulk import:', ledgerErr);
+          }
+        }
       }
 
       // Sync SkuMaster

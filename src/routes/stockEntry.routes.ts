@@ -26,6 +26,7 @@ router.get('/', async (req: Request, res: Response) => {
           { type: { contains: q, mode: 'insensitive' } },
           { product: { name: { contains: q, mode: 'insensitive' } } },
           { product: { sku: { contains: q, mode: 'insensitive' } } },
+          { grn: { grnNumber: { contains: q, mode: 'insensitive' } } },
           { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } },
           { invoice: { client: { companyName: { contains: q, mode: 'insensitive' } } } },
           { invoice: { supplier: { name: { contains: q, mode: 'insensitive' } } } },
@@ -65,7 +66,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST create manual stock entry / adjustment / issue / receipt
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { productId, type, quantityChange, date, notes } = req.body;
+    const { productId, type, quantityChange, date, notes, location } = req.body;
 
     if (!productId || quantityChange === undefined || quantityChange === null) {
       return res.status(400).json({ error: 'productId and quantityChange are required' });
@@ -116,10 +117,13 @@ router.post('/', async (req: Request, res: Response) => {
         },
       });
 
-      // Update cached Product quantity
+      // Update cached Product quantity and optionally location
       await tx.product.update({
         where: { id: productId },
-        data: { quantity: { increment: qtyChangeNum } },
+        data: { 
+          quantity: { increment: qtyChangeNum },
+          ...(location ? { location: String(location).trim() } : {})
+        },
       });
 
       return ledger;
