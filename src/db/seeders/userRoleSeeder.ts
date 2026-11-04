@@ -21,6 +21,10 @@ export async function seedUserRoles() {
 
   for (const item of userRoles) {
     try {
+      const userPassword = item.password
+        ? await bcrypt.hash(item.password, 10)
+        : defaultPasswordHash;
+
       const existingUser = await prisma.user.findFirst({
         where: {
           OR: [
@@ -31,8 +35,21 @@ export async function seedUserRoles() {
       });
 
       if (existingUser) {
-        console.log(`ℹ️ [SKIP USER] Already exists: username='${item.username}' | role='${item.role}'`);
-        userSkipped++;
+        if (item.username === 'chintan') {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              password: userPassword,
+              role: item.role,
+              status: item.status,
+              isBlock: item.isBlock
+            }
+          });
+          console.log(`🔄 [UPDATED USER] Updated credentials: username='${item.username}' | role='${item.role}'`);
+        } else {
+          console.log(`ℹ️ [SKIP USER] Already exists: username='${item.username}' | role='${item.role}'`);
+          userSkipped++;
+        }
       } else {
         const createdUser = await prisma.user.create({
           data: {
@@ -41,7 +58,7 @@ export async function seedUserRoles() {
             fullName: item.fullName,
             email: item.email,
             contactNumber: item.contactNumber,
-            password: defaultPasswordHash,
+            password: userPassword,
             role: item.role,
             status: item.status,
             isBlock: item.isBlock

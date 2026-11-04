@@ -23,6 +23,7 @@ export interface UserRoleMaster {
   email: string;
   status: 'Active' | 'Inactive';
   isBlock: boolean;
+  password?: string;
 }
 
 export interface CategoryMaster {
@@ -213,6 +214,18 @@ export const userRoles: UserRoleMaster[] = [
     email: 'production.manager@patelstrap.com',
     status: 'Active',
     isBlock: false
+  },
+  {
+    id: 11,
+    employeeId: 'ADM002',
+    username: 'chintan',
+    fullName: 'Chintan Patel',
+    role: 'Admin',
+    contactNumber: '9876543200',
+    email: 'chintan@patelstrap.com',
+    status: 'Active',
+    isBlock: false,
+    password: 'pass123'
   }
 ];
 
