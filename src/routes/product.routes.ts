@@ -490,8 +490,40 @@ async function generateNextItemCodeBackend(companyName?: string, categoryId?: an
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    if (!data.name) {
+    const trimmedName = String(data.name || '').trim();
+    if (!trimmedName) {
       return res.status(400).json({ error: 'Missing required field: name' });
+    }
+
+    // Check duplicate Item Name (case-insensitive)
+    const existingProductByName = await prisma.product.findFirst({
+      where: {
+        name: { equals: trimmedName, mode: 'insensitive' }
+      }
+    });
+
+    if (existingProductByName) {
+      return res.status(409).json({
+        error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
+        message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+      });
+    }
+
+    // Check duplicate SKU if custom SKU was supplied
+    if (data.sku && String(data.sku).trim()) {
+      const trimmedSku = String(data.sku).trim();
+      const existingProductBySku = await prisma.product.findFirst({
+        where: {
+          sku: { equals: trimmedSku, mode: 'insensitive' }
+        }
+      });
+
+      if (existingProductBySku) {
+        return res.status(409).json({
+          error: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`,
+          message: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`
+        });
+      }
     }
 
     const parseId = (val: any): number | null => {
@@ -651,6 +683,46 @@ router.put('/:id', async (req: Request, res: Response) => {
         unit: true
       }
     });
+
+    if (!oldProduct) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Check duplicate Item Name excluding self
+    if (data.name && String(data.name).trim()) {
+      const trimmedName = String(data.name).trim();
+      const existingProductByName = await prisma.product.findFirst({
+        where: {
+          id: { not: id },
+          name: { equals: trimmedName, mode: 'insensitive' }
+        }
+      });
+
+      if (existingProductByName) {
+        return res.status(409).json({
+          error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
+          message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+        });
+      }
+    }
+
+    // Check duplicate SKU excluding self
+    if (data.sku && String(data.sku).trim()) {
+      const trimmedSku = String(data.sku).trim();
+      const existingProductBySku = await prisma.product.findFirst({
+        where: {
+          id: { not: id },
+          sku: { equals: trimmedSku, mode: 'insensitive' }
+        }
+      });
+
+      if (existingProductBySku) {
+        return res.status(409).json({
+          error: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`,
+          message: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`
+        });
+      }
+    }
 
     const parseId = (val: any): number | null => {
       if (!val) return null;
@@ -977,6 +1049,18 @@ export async function processBulkProductItems(rows: any[]): Promise<{ successCou
         rollWeight,
         rollJoint
       };
+
+      // Check duplicate Item Name under a different SKU
+      const existingByName = await prisma.product.findFirst({
+        where: {
+          sku: { not: sku },
+          name: { equals: name, mode: 'insensitive' }
+        }
+      });
+      if (existingByName) {
+        errors.push(`Row ${rowNum}: Item name "${name}" already exists under different SKU "${existingByName.sku}". Duplicate item names are not allowed.`);
+        continue;
+      }
 
       const existing = await prisma.product.findUnique({ where: { sku } });
       if (existing) {

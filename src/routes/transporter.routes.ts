@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import * as xlsx from 'xlsx';
 import { authorizeRole } from '../middleware/auth';
 import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // GET all transporters
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
@@ -235,6 +238,91 @@ router.post('/bulk-import', authorizeRole('PLANT_ADMIN'), async (req: Request, r
   } catch (error: any) {
     console.error('Bulk import transporters error:', error);
     res.status(500).json({ error: 'Failed to process bulk import', message: error?.message });
+  }
+});
+
+// POST bulk upload transporters (multipart Excel file)
+router.post('/bulk-upload', authorizeRole('PLANT_ADMIN'), upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+
+    let createdCount = 0;
+    let updatedCount = 0;
+
+    for (const item of rows) {
+      const name = item.name || item['Transporter Name'] || item.transporterName ? String(item.name || item['Transporter Name'] || item.transporterName).trim() : '';
+      if (!name) continue;
+
+      const gstin = item.gstin || item['GSTIN'] || item['GSTIN / Transporter ID'] ? String(item.gstin || item['GSTIN'] || item['GSTIN / Transporter ID']).trim().toUpperCase() : null;
+
+      const existing = await prisma.transporter.findFirst({
+        where: {
+          OR: [
+            { name: { equals: name, mode: 'insensitive' as const } },
+            ...(gstin ? [{ gstin: { equals: gstin, mode: 'insensitive' as const } }] : [])
+          ]
+        }
+      });
+
+      const payload = {
+        name,
+        gstin,
+        transporterId: item.transporterId || item['Transporter ID'] ? String(item.transporterId || item['Transporter ID']).trim() : null,
+        phone: item.phone || item['Contact Phone'] || item['Phone'] ? String(item.phone || item['Contact Phone'] || item['Phone']).trim() : null,
+        email: item.email || item['Email'] ? String(item.email || item['Email']).trim().toLowerCase() : null,
+        contactPerson: item.contactPerson || item['Contact Person'] ? String(item.contactPerson || item['Contact Person']).trim() : null,
+        address: item.address || item['Address'] ? String(item.address || item['Address']).trim() : null,
+        city: item.city || item['City'] ? String(item.city || item['City']).trim() : null,
+        state: item.state || item['State'] ? String(item.state || item['State']).trim() : null,
+        pincode: item.pincode || item['Pincode'] ? String(item.pincode || item['Pincode']).trim() : null,
+        modeOfTransport: item.modeOfTransport || item['Mode of Transport'] ? String(item.modeOfTransport || item['Mode of Transport']).trim() : 'Road',
+        vehicleTypes: item.vehicleTypes || item['Vehicle Types'] ? String(item.vehicleTypes || item['Vehicle Types']).trim() : null,
+        freightTerms: item.freightTerms || item['Freight Terms'] ? String(item.freightTerms || item['Freight Terms']).trim() : 'To Pay',
+        trackingUrl: item.trackingUrl || item['Tracking URL'] ? String(item.trackingUrl || item['Tracking URL']).trim() : null,
+        disabled: item.disabled !== undefined ? Boolean(item.disabled) : false
+      };
+
+      if (existing) {
+        await prisma.transporter.update({
+          where: { id: existing.id },
+          data: payload
+        });
+        updatedCount++;
+      } else {
+        await prisma.transporter.create({
+          data: payload
+        });
+        createdCount++;
+      }
+    }
+
+    await logActivity({
+      entityType: 'Transporter',
+      entityId: 'BULK',
+      action: 'BULK_IMPORT',
+      description: `Bulk uploaded ${createdCount + updatedCount} transporters (${createdCount} created, ${updatedCount} updated)`,
+      userId: (req as any).user?.id
+    });
+
+    res.json({
+      success: true,
+      successCount: createdCount + updatedCount,
+      count: createdCount + updatedCount,
+      createdCount,
+      updatedCount,
+      errors: [],
+      message: `Successfully uploaded ${createdCount + updatedCount} transporters`
+    });
+  } catch (error: any) {
+    console.error('Bulk upload transporters error:', error);
+    res.status(500).json({ error: 'Failed to process bulk upload', message: error?.message });
   }
 });
 

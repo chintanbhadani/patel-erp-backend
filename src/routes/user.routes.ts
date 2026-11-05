@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import * as xlsx from 'xlsx';
 import { userRoles as INITIAL_USERS } from '../db/seederMasters';
 
 const router = Router();
 const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Memory store fallback
 let sampleUsers: any[] = [];
@@ -459,6 +462,176 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Process bulk users helper
+export async function processBulkUsers(rows: any[], currentUserId?: string): Promise<{ successCount: number; errors: string[]; createdCount: number; updatedCount: number }> {
+  let successCount = 0;
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 2;
+
+    try {
+      const username = String(
+        row.username ||
+        row['User Name'] ||
+        row['Username'] ||
+        row.userName ||
+        row.user_name ||
+        ''
+      ).trim();
+
+      if (!username) {
+        errors.push(`Row ${rowNum}: Username is required`);
+        continue;
+      }
+
+      const fullName = String(
+        row.fullName ||
+        row['Full Name'] ||
+        row.name ||
+        row['Name'] ||
+        username
+      ).trim();
+
+      const employeeId = String(
+        row.employeeId ||
+        row['Employee ID'] ||
+        row.employee_id ||
+        ''
+      ).trim() || null;
+
+      const email = String(
+        row.email ||
+        row['Email'] ||
+        ''
+      ).trim() || null;
+
+      const contactNumber = String(
+        row.contactNumber ||
+        row['Contact Number'] ||
+        row.phone ||
+        row['Phone'] ||
+        ''
+      ).trim() || null;
+
+      const role = String(
+        row.role ||
+        row['Role'] ||
+        'Plant Admin'
+      ).trim();
+
+      const status = String(
+        row.status ||
+        row['Status'] ||
+        'Active'
+      ).trim();
+
+      const rawPassword = String(
+        row.password ||
+        row['Password'] ||
+        'pass123'
+      ).trim();
+
+      const isBlock = ['yes', 'true', '1'].includes(String(row.isBlock || row['Is Blocked'] || '').trim().toLowerCase());
+
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: { equals: username, mode: 'insensitive' as const } },
+            ...(employeeId ? [{ employeeId: { equals: employeeId, mode: 'insensitive' as const } }] : [])
+          ]
+        }
+      });
+
+      if (existing) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            fullName: fullName || existing.fullName,
+            email: email || existing.email,
+            contactNumber: contactNumber || existing.contactNumber,
+            role: role || existing.role,
+            status: status || existing.status,
+            isBlock: isBlock !== undefined ? isBlock : existing.isBlock
+          }
+        });
+        updatedCount++;
+      } else {
+        const hashedPassword = await bcrypt.hash(rawPassword, 10);
+        await prisma.user.create({
+          data: {
+            username,
+            fullName,
+            employeeId,
+            email,
+            contactNumber,
+            password: hashedPassword,
+            role,
+            status,
+            isBlock
+          }
+        });
+        createdCount++;
+      }
+
+      successCount++;
+    } catch (err: any) {
+      errors.push(`Row ${rowNum}: ${err.message || 'Failed to process user row'}`);
+    }
+  }
+
+  return { successCount, createdCount, updatedCount, errors };
+}
+
+// POST bulk import (JSON array)
+router.post('/bulk-import', async (req: Request, res: Response) => {
+  try {
+    const items = req.body.items || req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No user records provided for import' });
+    }
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkUsers(items, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} users (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk import users error:', error);
+    res.status(500).json({ error: 'Failed to process bulk import', message: error?.message });
+  }
+});
+
+// POST bulk upload (multipart Excel file)
+router.post('/bulk-upload', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+
+    const currentUserId = (req as any).user?.id;
+    const result = await processBulkUsers(rows, currentUserId);
+
+    res.json({
+      message: `Successfully processed ${result.successCount} users (${result.createdCount} created, ${result.updatedCount} updated).`,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Bulk upload users error:', error);
+    res.status(500).json({ error: 'Failed to process bulk upload', message: error?.message });
   }
 });
 
