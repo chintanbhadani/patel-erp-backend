@@ -553,7 +553,7 @@ model PurchaseOrder {
   series              String?             @default("NCL-.YYYY.-.MM.-")
   status              String              @default("Draft")
   approvalStatus      String              @default("Draft")
-  company             String              @default("PATEL STRAP INDUSTRIES LTD")
+  company             String              @default("PATEL STRAP PVT LTD")
   supplier            String?
   supplierId          Int?
   supplierObj         Supplier?           @relation(fields: [supplierId], references: [id])
@@ -628,7 +628,7 @@ model MaterialRequest {
   departmentObj       Department?           @relation(fields: [departmentId], references: [id])
   requiredFor         String?
   priceList           String?               @default("Standard Buying")
-  company             String                @default("PATEL STRAP INDUSTRIES LTD")
+  company             String                @default("PATEL STRAP PVT LTD")
   attendBy            String?
   purchaseType        String?
   setWarehouse        String?               @default("Main Store - PSL")

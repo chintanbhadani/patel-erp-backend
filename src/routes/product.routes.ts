@@ -974,7 +974,7 @@ export async function processBulkProductItems(rows: any[]): Promise<{ successCou
       }
 
       // Company
-      const company = String(row.company || row['Company'] || 'PATEL STRAP INDUSTRIES LTD').trim();
+      const company = String(row.company || row['Company'] || 'PATEL STRAP PVT LTD').trim();
 
       // SKU (Item Code)
       let sku = String(row.sku || row['SKU'] || row['Item Code'] || row.itemCode || '').trim();
