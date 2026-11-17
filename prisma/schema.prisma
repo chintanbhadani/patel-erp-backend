@@ -144,6 +144,7 @@ model Supplier {
 model Category {
   id         Int         @id @default(autoincrement())
   name       String
+  imageUrl   String?
   disabled   Boolean     @default(false)
   products   Product[]
   skuMasters SkuMaster[]
@@ -152,6 +153,7 @@ model Category {
 model Unit {
   id       Int       @id @default(autoincrement())
   name     String
+  imageUrl String?
   disabled Boolean   @default(false)
   products Product[]
 }
@@ -182,6 +184,7 @@ model Department {
 model PartOf {
   id        Int      @id @default(autoincrement())
   name      String
+  imageUrl  String?
   disabled  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -190,6 +193,34 @@ model PartOf {
 model SubPartOf {
   id        Int      @id @default(autoincrement())
   name      String
+  imageUrl  String?
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model CoreMaster {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String?
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model DieMaster {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String?
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model GradeMaster {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String?
   disabled  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -249,6 +280,13 @@ model Product {
   rollSurface            String?
   rollWeight             Float?      @default(0)
   rollJoint              String?
+
+  // Finished Goods Product Specifications
+  thickness              Float?      @default(0)
+  color                  String?
+  grade                  String?
+  coreSize               String?
+  dieSelection           String?
 
   invoiceItems           InvoiceItem[]
   stockLedgers           StockLedger[]

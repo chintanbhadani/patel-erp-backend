@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Get all clients
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, disabled, status, onlyEnabled } = req.query;
     const where: any = {};
     if (search && typeof search === 'string' && search.trim()) {
       const q = search.trim();
@@ -21,6 +21,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP'), async (req, res) => {
         { phone: { contains: q, mode: 'insensitive' } },
         { email: { contains: q, mode: 'insensitive' } }
       ];
+    }
+    if (disabled !== undefined) {
+      where.disabled = disabled === 'true' || disabled === '1';
+    } else if (status !== undefined) {
+      if (String(status).toLowerCase() === 'enabled' || String(status).toLowerCase() === 'active') where.disabled = false;
+      else if (String(status).toLowerCase() === 'disabled') where.disabled = true;
+    } else if (onlyEnabled === 'true' || onlyEnabled === '1') {
+      where.disabled = false;
     }
     const clients = await prisma.client.findMany({
       where,

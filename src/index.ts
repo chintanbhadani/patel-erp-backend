@@ -33,6 +33,9 @@ import weighmentLedgerRouter from './routes/weighmentLedger.routes';
 import inquiryRouter from './routes/inquiry.routes';
 import transporterRouter from './routes/transporter.routes';
 import machineRouter from './routes/machine.routes';
+import coreRouter from './routes/core.routes';
+import dieRouter from './routes/die.routes';
+import gradeRouter from './routes/grade.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -90,6 +93,9 @@ app.use('/api/weighment-ledger', weighmentLedgerRouter);
 app.use('/api/inquiries', inquiryRouter);
 app.use('/api/transporters', transporterRouter);
 app.use('/api/machines', machineRouter);
+app.use('/api/cores', coreRouter);
+app.use('/api/dies', dieRouter);
+app.use('/api/grades', gradeRouter);
 
 // Start IoT Scale Listener (TCP Server)
 const IOT_SCALE_PORT = Number(process.env.IOT_SCALE_PORT) || 9000;

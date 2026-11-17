@@ -230,12 +230,21 @@ export const userRoles: UserRoleMaster[] = [
 ];
 
 export const categories: CategoryMaster[] = [
-  { id: 1, name: 'TOOLS' },
+  { id: 1, name: 'PET STRAP' },
   { id: 2, name: 'RAW MATERIAL' },
-  { id: 3, name: 'HARDWARE' },
-  { id: 4, name: 'CONSUMABLE' },
-  { id: 5, name: 'DRILLING MACHINE' },
-  { id: 6, name: 'WORKSHOP' }
+  { id: 3, name: 'CONSUMABLE' },
+  { id: 4, name: 'TOOLS' },
+  { id: 5, name: 'HARDWARE' },
+  { id: 6, name: 'STRAP ROLLS' },
+  { id: 7, name: 'PACKING CLIPS' },
+  { id: 8, name: 'PET RESIN' },
+  { id: 9, name: 'COLOR MASTERBATCH' },
+  { id: 10, name: 'CARTON BOXES' },
+  { id: 11, name: 'TOOLING SPARES' },
+  { id: 12, name: 'Antioxidant' },
+  { id: 13, name: 'Wrapping Film' },
+  { id: 14, name: 'DRILLING MACHINE' },
+  { id: 15, name: 'WORKSHOP' }
 ];
 
 export interface PartOfMaster {
@@ -249,9 +258,9 @@ export interface SubPartOfMaster {
 }
 
 export const partOfs: PartOfMaster[] = [
-  { id: 1, name: 'CONSUMABLE' },
+  { id: 1, name: 'FINISHED GOODS' },
   { id: 2, name: 'RAW MATERIAL' },
-  { id: 3, name: 'FINISHED GOODS' },
+  { id: 3, name: 'CONSUMABLE' },
   { id: 4, name: 'SPARE PARTS' }
 ];
 
@@ -259,6 +268,52 @@ export const subPartOfs: SubPartOfMaster[] = [
   { id: 1, name: 'WORKSHOP' },
   { id: 2, name: 'LINE A' },
   { id: 3, name: 'MAIN STORE' }
+];
+
+export interface CoreSeederMaster {
+  name: string;
+}
+
+export interface DieSeederMaster {
+  name: string;
+}
+
+export interface GradeSeederMaster {
+  name: string;
+}
+
+export interface UnitSeederMaster {
+  name: string;
+}
+
+export const cores: CoreSeederMaster[] = [
+  { name: '406 x 150 mm (16" Core)' },
+  { name: '203 x 150 mm (8" Core)' },
+  { name: '406 x 190 mm' }
+];
+
+export const dies: DieSeederMaster[] = [
+  { name: 'Die 19mm' },
+  { name: 'Die 16mm' },
+  { name: 'Die 12mm' },
+  { name: 'Die 9mm' }
+];
+
+export const grades: GradeSeederMaster[] = [
+  { name: 'Manual Grade' },
+  { name: 'Semi-Automatic Grade' },
+  { name: 'Fully Automatic Machine Grade' },
+  { name: 'High Tensile (A-Grade)' },
+  { name: 'Virgin Grade' },
+  { name: 'Commercial Grade' }
+];
+
+export const units: UnitSeederMaster[] = [
+  { name: 'Box' },
+  { name: 'Kg' },
+  { name: 'Meter' },
+  { name: 'Piece' },
+  { name: 'Roll' }
 ];
 
 export interface ModuleMaster {

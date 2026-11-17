@@ -9,13 +9,32 @@ const router = Router();
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const DEFAULT_CATEGORIES = ['PET STRAP', 'RAW MATERIAL', 'CONSUMABLE', 'TOOLS', 'HARDWARE', 'STRAP ROLLS'];
+
 // GET all categories
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
+    const { search, disabled, status, onlyEnabled } = req.query;
+
+    // Ensure PET STRAP always exists
+    const hasPetStrap = await prisma.category.findFirst({
+      where: { name: { equals: 'PET STRAP', mode: 'insensitive' } }
+    });
+    if (!hasPetStrap) {
+      await prisma.category.create({ data: { name: 'PET STRAP', disabled: false } }).catch(() => {});
+    }
+
     const where: any = {};
     if (search && typeof search === 'string' && search.trim()) {
       where.name = { contains: search.trim(), mode: 'insensitive' };
+    }
+    if (disabled !== undefined) {
+      where.disabled = disabled === 'true' || disabled === '1';
+    } else if (status !== undefined) {
+      if (String(status).toLowerCase() === 'enabled') where.disabled = false;
+      else if (String(status).toLowerCase() === 'disabled') where.disabled = true;
+    } else if (onlyEnabled === 'true' || onlyEnabled === '1') {
+      where.disabled = false;
     }
     const categories = await prisma.category.findMany({
       where,

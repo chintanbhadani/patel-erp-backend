@@ -23,7 +23,7 @@ const normalizeForComparison = (str: string) => {
 // GET all machines (with auto-seeder if empty)
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
+    const { search, disabled, status, onlyEnabled } = req.query;
     let count = await prisma.machineMaster.count();
     
     // Seed defaults if empty
@@ -41,6 +41,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
         { name: { contains: search.trim(), mode: 'insensitive' as const } },
         { code: { contains: search.trim(), mode: 'insensitive' as const } }
       ];
+    }
+    if (disabled !== undefined) {
+      where.disabled = disabled === 'true' || disabled === '1';
+    } else if (status !== undefined) {
+      if (String(status).toLowerCase() === 'enabled') where.disabled = false;
+      else if (String(status).toLowerCase() === 'disabled') where.disabled = true;
+    } else if (onlyEnabled === 'true' || onlyEnabled === '1') {
+      where.disabled = false;
     }
 
     const machines = await prisma.machineMaster.findMany({

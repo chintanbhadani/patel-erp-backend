@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // GET all transporters
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
-    const { search, status } = req.query;
+    const { search, status, disabled, onlyEnabled } = req.query;
     const where: any = {};
 
     if (search && typeof search === 'string' && search.trim()) {
@@ -27,10 +27,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
       ];
     }
 
-    if (status === 'active') {
+    if (disabled !== undefined) {
+      where.disabled = disabled === 'true' || disabled === '1';
+    } else if (status === 'active' || status === 'enabled') {
       where.disabled = false;
     } else if (status === 'disabled') {
       where.disabled = true;
+    } else if (onlyEnabled === 'true' || onlyEnabled === '1') {
+      where.disabled = false;
     }
 
     const transporters = await prisma.transporter.findMany({

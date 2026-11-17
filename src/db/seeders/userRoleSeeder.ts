@@ -1,12 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { userRoles, categories, partOfs, subPartOfs } from '../seederMasters';
+import { 
+  userRoles, 
+  categories, 
+  partOfs, 
+  subPartOfs,
+  cores,
+  dies,
+  grades,
+  units
+} from '../seederMasters';
 
 const prisma = new PrismaClient();
 
 /**
  * Upsert / Seed helper function:
- * Checks if record already exists based on unique criteria.
+ * Checks if record already exists based on unique criteria / name.
  * If entry already exists -> DOES NOT ADD OR OVERWRITE DATA.
  * If entry does not exist -> Inserts record.
  */
@@ -73,7 +82,7 @@ export async function seedUserRoles() {
   }
 
   console.log('-----------------------------------------');
-  console.log('📦 Starting Category Seeder...');
+  console.log('📦 Starting Category / Item Group Seeder...');
   console.log('-----------------------------------------');
   let catInserted = 0;
   let catSkipped = 0;
@@ -82,20 +91,16 @@ export async function seedUserRoles() {
     try {
       const existingCat = await prisma.category.findFirst({
         where: {
-          OR: [
-            { id: cat.id },
-            { name: cat.name }
-          ]
+          name: { equals: cat.name, mode: 'insensitive' }
         }
       });
 
       if (existingCat) {
-        console.log(`ℹ️ [SKIP CATEGORY] Already exists: ID=${existingCat.id} | name='${existingCat.name}'`);
+        console.log(`ℹ️ [SKIP CATEGORY] Already exists: name='${existingCat.name}'`);
         catSkipped++;
       } else {
         const createdCat = await prisma.category.create({
           data: {
-            id: cat.id,
             name: cat.name
           }
         });
@@ -105,13 +110,6 @@ export async function seedUserRoles() {
     } catch (err: any) {
       console.error(`❌ Error processing seed category '${cat.name}':`, err.message || err);
     }
-  }
-
-  // Sync postgres sequence for category_id_seq if needed
-  try {
-    await prisma.$executeRawUnsafe(`SELECT setval('public."Category_id_seq"', (SELECT COALESCE(MAX(id), 1) FROM "Category"));`);
-  } catch (e) {
-    // Ignore sequence warning if dev DB
   }
 
   console.log('-----------------------------------------');
@@ -124,20 +122,16 @@ export async function seedUserRoles() {
     try {
       const existing = await prisma.partOf.findFirst({
         where: {
-          OR: [
-            { id: item.id },
-            { name: item.name }
-          ]
+          name: { equals: item.name, mode: 'insensitive' }
         }
       });
 
       if (existing) {
-        console.log(`ℹ️ [SKIP PART OF] Already exists: ID=${existing.id} | name='${existing.name}'`);
+        console.log(`ℹ️ [SKIP PART OF] Already exists: name='${existing.name}'`);
         partOfSkipped++;
       } else {
         const created = await prisma.partOf.create({
           data: {
-            id: item.id,
             name: item.name
           }
         });
@@ -147,12 +141,6 @@ export async function seedUserRoles() {
     } catch (err: any) {
       console.error(`❌ Error processing seed Part Of '${item.name}':`, err.message || err);
     }
-  }
-
-  try {
-    await prisma.$executeRawUnsafe(`SELECT setval('public."PartOf_id_seq"', (SELECT COALESCE(MAX(id), 1) FROM "PartOf"));`);
-  } catch (e) {
-    // Ignore sequence warning if dev DB
   }
 
   console.log('-----------------------------------------');
@@ -165,20 +153,16 @@ export async function seedUserRoles() {
     try {
       const existing = await prisma.subPartOf.findFirst({
         where: {
-          OR: [
-            { id: item.id },
-            { name: item.name }
-          ]
+          name: { equals: item.name, mode: 'insensitive' }
         }
       });
 
       if (existing) {
-        console.log(`ℹ️ [SKIP SUB PART OF] Already exists: ID=${existing.id} | name='${existing.name}'`);
+        console.log(`ℹ️ [SKIP SUB PART OF] Already exists: name='${existing.name}'`);
         subPartOfSkipped++;
       } else {
         const created = await prisma.subPartOf.create({
           data: {
-            id: item.id,
             name: item.name
           }
         });
@@ -190,18 +174,120 @@ export async function seedUserRoles() {
     }
   }
 
-  try {
-    await prisma.$executeRawUnsafe(`SELECT setval('public."SubPartOf_id_seq"', (SELECT COALESCE(MAX(id), 1) FROM "SubPartOf"));`);
-  } catch (e) {
-    // Ignore sequence warning if dev DB
+  console.log('-----------------------------------------');
+  console.log('⚙️ Starting Core Master Seeder...');
+  console.log('-----------------------------------------');
+  let coreInserted = 0;
+  let coreSkipped = 0;
+
+  for (const item of cores) {
+    try {
+      const existing = await prisma.coreMaster.findFirst({
+        where: { name: { equals: item.name, mode: 'insensitive' } }
+      });
+      if (existing) {
+        console.log(`ℹ️ [SKIP CORE] Already exists: name='${existing.name}'`);
+        coreSkipped++;
+      } else {
+        const created = await prisma.coreMaster.create({
+          data: { name: item.name, disabled: false }
+        });
+        console.log(`✅ [INSERTED CORE] ID=${created.id} | name='${created.name}'`);
+        coreInserted++;
+      }
+    } catch (err: any) {
+      console.error(`❌ Error processing seed Core '${item.name}':`, err.message || err);
+    }
+  }
+
+  console.log('-----------------------------------------');
+  console.log('🔘 Starting Die Master Seeder...');
+  console.log('-----------------------------------------');
+  let dieInserted = 0;
+  let dieSkipped = 0;
+
+  for (const item of dies) {
+    try {
+      const existing = await prisma.dieMaster.findFirst({
+        where: { name: { equals: item.name, mode: 'insensitive' } }
+      });
+      if (existing) {
+        console.log(`ℹ️ [SKIP DIE] Already exists: name='${existing.name}'`);
+        dieSkipped++;
+      } else {
+        const created = await prisma.dieMaster.create({
+          data: { name: item.name, disabled: false }
+        });
+        console.log(`✅ [INSERTED DIE] ID=${created.id} | name='${created.name}'`);
+        dieInserted++;
+      }
+    } catch (err: any) {
+      console.error(`❌ Error processing seed Die '${item.name}':`, err.message || err);
+    }
+  }
+
+  console.log('-----------------------------------------');
+  console.log('🏷️ Starting Grade Master Seeder...');
+  console.log('-----------------------------------------');
+  let gradeInserted = 0;
+  let gradeSkipped = 0;
+
+  for (const item of grades) {
+    try {
+      const existing = await prisma.gradeMaster.findFirst({
+        where: { name: { equals: item.name, mode: 'insensitive' } }
+      });
+      if (existing) {
+        console.log(`ℹ️ [SKIP GRADE] Already exists: name='${existing.name}'`);
+        gradeSkipped++;
+      } else {
+        const created = await prisma.gradeMaster.create({
+          data: { name: item.name, disabled: false }
+        });
+        console.log(`✅ [INSERTED GRADE] ID=${created.id} | name='${created.name}'`);
+        gradeInserted++;
+      }
+    } catch (err: any) {
+      console.error(`❌ Error processing seed Grade '${item.name}':`, err.message || err);
+    }
+  }
+
+  console.log('-----------------------------------------');
+  console.log('📏 Starting Unit (UOM) Seeder...');
+  console.log('-----------------------------------------');
+  let unitInserted = 0;
+  let unitSkipped = 0;
+
+  for (const item of units) {
+    try {
+      const existing = await prisma.unit.findFirst({
+        where: { name: { equals: item.name, mode: 'insensitive' } }
+      });
+      if (existing) {
+        console.log(`ℹ️ [SKIP UNIT] Already exists: name='${existing.name}'`);
+        unitSkipped++;
+      } else {
+        const created = await prisma.unit.create({
+          data: { name: item.name, disabled: false }
+        });
+        console.log(`✅ [INSERTED UNIT] ID=${created.id} | name='${created.name}'`);
+        unitInserted++;
+      }
+    } catch (err: any) {
+      console.error(`❌ Error processing seed Unit '${item.name}':`, err.message || err);
+    }
   }
 
   console.log('-----------------------------------------');
   console.log(`🎉 Master Seeding Complete!`);
   console.log(`   Users: ${userInserted} inserted, ${userSkipped} skipped.`);
-  console.log(`   Categories: ${catInserted} inserted, ${catSkipped} skipped.`);
+  console.log(`   Categories / Item Groups: ${catInserted} inserted, ${catSkipped} skipped.`);
   console.log(`   Part Of: ${partOfInserted} inserted, ${partOfSkipped} skipped.`);
   console.log(`   Sub Part Of: ${subPartOfInserted} inserted, ${subPartOfSkipped} skipped.`);
+  console.log(`   Cores: ${coreInserted} inserted, ${coreSkipped} skipped.`);
+  console.log(`   Dies: ${dieInserted} inserted, ${dieSkipped} skipped.`);
+  console.log(`   Grades: ${gradeInserted} inserted, ${gradeSkipped} skipped.`);
+  console.log(`   Units: ${unitInserted} inserted, ${unitSkipped} skipped.`);
   console.log('-----------------------------------------');
 }
 

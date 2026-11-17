@@ -174,14 +174,20 @@ router.get('/', async (req: Request, res: Response) => {
       AND.push({ location: { contains: locationQuery, mode: 'insensitive' } });
     }
 
-    const statusQuery = String(status || '').trim();
-    if (statusQuery) {
-      if (statusQuery.toLowerCase() === 'enabled') {
-        AND.push({ disabled: false });
-      } else if (statusQuery.toLowerCase() === 'disabled') {
-        AND.push({ disabled: true });
-      } else {
-        AND.push({ status: statusQuery as any });
+    if (req.query.disabled !== undefined) {
+      AND.push({ disabled: req.query.disabled === 'true' || req.query.disabled === '1' });
+    } else if (req.query.onlyEnabled === 'true' || req.query.onlyEnabled === '1') {
+      AND.push({ disabled: false });
+    } else {
+      const statusQuery = String(status || '').trim();
+      if (statusQuery) {
+        if (statusQuery.toLowerCase() === 'enabled') {
+          AND.push({ disabled: false });
+        } else if (statusQuery.toLowerCase() === 'disabled') {
+          AND.push({ disabled: true });
+        } else {
+          AND.push({ status: statusQuery as any });
+        }
       }
     }
 
@@ -495,18 +501,21 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required field: name' });
     }
 
-    // Check duplicate Item Name (case-insensitive)
-    const existingProductByName = await prisma.product.findFirst({
-      where: {
-        name: { equals: trimmedName, mode: 'insensitive' }
-      }
-    });
-
-    if (existingProductByName) {
-      return res.status(409).json({
-        error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
-        message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+    // Check duplicate Item Name (case-insensitive), unless it's a standard finished good
+    const isFinishedGoodStandardName = trimmedName.toLowerCase() === 'cut length' || trimmedName.toLowerCase() === 'pet strap roll';
+    if (!isFinishedGoodStandardName) {
+      const existingProductByName = await prisma.product.findFirst({
+        where: {
+          name: { equals: trimmedName, mode: 'insensitive' }
+        }
       });
+
+      if (existingProductByName) {
+        return res.status(409).json({
+          error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
+          message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+        });
+      }
     }
 
     // Check duplicate SKU if custom SKU was supplied
@@ -607,6 +616,11 @@ router.post('/', async (req: Request, res: Response) => {
         rollSurface: data.rollSurface ? String(data.rollSurface) : null,
         rollWeight: data.rollWeight !== undefined && data.rollWeight !== null && data.rollWeight !== '' ? parseFloat(data.rollWeight) : 0,
         rollJoint: data.rollJoint ? String(data.rollJoint) : null,
+        thickness: data.thickness !== undefined && data.thickness !== null && data.thickness !== '' ? parseFloat(data.thickness) : 0,
+        color: data.color ? String(data.color) : null,
+        grade: data.grade ? String(data.grade) : null,
+        coreSize: data.coreSize ? String(data.coreSize) : null,
+        dieSelection: data.dieSelection ? String(data.dieSelection) : null,
       },
       include: {
         category: true,
@@ -691,18 +705,21 @@ router.put('/:id', async (req: Request, res: Response) => {
     // Check duplicate Item Name excluding self
     if (data.name && String(data.name).trim()) {
       const trimmedName = String(data.name).trim();
-      const existingProductByName = await prisma.product.findFirst({
-        where: {
-          id: { not: id },
-          name: { equals: trimmedName, mode: 'insensitive' }
-        }
-      });
-
-      if (existingProductByName) {
-        return res.status(409).json({
-          error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
-          message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+      const isFinishedGoodStandardName = trimmedName.toLowerCase() === 'cut length' || trimmedName.toLowerCase() === 'pet strap roll';
+      if (!isFinishedGoodStandardName) {
+        const existingProductByName = await prisma.product.findFirst({
+          where: {
+            id: { not: id },
+            name: { equals: trimmedName, mode: 'insensitive' }
+          }
         });
+
+        if (existingProductByName) {
+          return res.status(409).json({
+            error: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`,
+            message: `Item name "${trimmedName}" already exists (SKU: ${existingProductByName.sku}). Duplicate item names are not allowed.`
+          });
+        }
       }
     }
 
@@ -816,6 +833,11 @@ router.put('/:id', async (req: Request, res: Response) => {
         rollSurface: data.rollSurface !== undefined ? (data.rollSurface || null) : undefined,
         rollWeight: data.rollWeight !== undefined && data.rollWeight !== null && data.rollWeight !== '' ? parseFloat(data.rollWeight) : (data.rollWeight === '' ? 0 : undefined),
         rollJoint: data.rollJoint !== undefined ? (data.rollJoint || null) : undefined,
+        thickness: data.thickness !== undefined && data.thickness !== null && data.thickness !== '' ? parseFloat(data.thickness) : (data.thickness === '' ? 0 : undefined),
+        color: data.color !== undefined ? (data.color || null) : undefined,
+        grade: data.grade !== undefined ? (data.grade || null) : undefined,
+        coreSize: data.coreSize !== undefined ? (data.coreSize || null) : undefined,
+        dieSelection: data.dieSelection !== undefined ? (data.dieSelection || null) : undefined,
       },
       include: {
         category: true,

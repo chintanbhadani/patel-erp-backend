@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // GET all suppliers
 router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
+    const { search, disabled, status, onlyEnabled } = req.query;
     const where: any = {};
     if (search && typeof search === 'string' && search.trim()) {
       const q = search.trim();
@@ -23,6 +23,14 @@ router.get('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), a
         { supplierGroup: { contains: q, mode: 'insensitive' } },
         { country: { contains: q, mode: 'insensitive' } }
       ];
+    }
+    if (disabled !== undefined) {
+      where.disabled = disabled === 'true' || disabled === '1';
+    } else if (status !== undefined) {
+      if (String(status).toLowerCase() === 'enabled') where.disabled = false;
+      else if (String(status).toLowerCase() === 'disabled') where.disabled = true;
+    } else if (onlyEnabled === 'true' || onlyEnabled === '1') {
+      where.disabled = false;
     }
     const suppliers = await prisma.supplier.findMany({
       where,
