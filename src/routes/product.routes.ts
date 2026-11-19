@@ -350,7 +350,9 @@ router.get('/bin-report', async (req: Request, res: Response) => {
       actualQuantity: Number(p.quantity || 0),
       warehouse: p.location || 'Main Store - NCL',
       assignedTo: p.assignedTo || 'Administrator',
-      tags: p.tags || ''
+      tags: p.tags || '',
+      rollWidth: p.rollWidth,
+      thickness: p.thickness
     }));
 
     // Merge database items with sample items (avoiding duplicate SKUs)
