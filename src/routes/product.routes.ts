@@ -426,14 +426,19 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-async function generateNextItemCodeBackend(companyName?: string, categoryId?: any, requestedSku?: string): Promise<string> {
+async function generateNextItemCodeBackend(companyName?: string, categoryId?: any, requestedSku?: string, itemName?: string): Promise<string> {
   let compPrefix = 'PS';
   const compUpper = (companyName || '').toUpperCase();
   if (compUpper.includes('TANSA')) compPrefix = 'TAN';
   else if (compUpper.includes('NEELKANTH')) compPrefix = 'NG';
 
+  const itemUpper = (itemName || '').toUpperCase().trim();
   let groupCode = 'TL';
-  if (categoryId) {
+  if (itemUpper.includes('ROLL')) {
+    groupCode = 'RO';
+  } else if (itemUpper.includes('CUT')) {
+    groupCode = 'CL';
+  } else if (categoryId) {
     const rawId = typeof categoryId === 'object' && categoryId !== null ? categoryId.id : categoryId;
     const catIdNum = parseInt(String(rawId), 10);
     if (!isNaN(catIdNum) && catIdNum > 0) {
@@ -441,13 +446,18 @@ async function generateNextItemCodeBackend(companyName?: string, categoryId?: an
         const cat = await prisma.category.findUnique({ where: { id: catIdNum } });
         if (cat && cat.name) {
           const g = cat.name.toUpperCase();
-          if (g.includes('TOOL')) groupCode = 'TL';
-          else if (g.includes('HARDWARE')) groupCode = 'HW';
+          if (g.includes('ROLL') || g === 'PET STRAP') groupCode = 'RO';
+          else if (g.includes('CUT')) groupCode = 'CL';
+          else if (g.includes('TOOL')) groupCode = 'TL';
+          else if (g.includes('HARDWARE') || g.includes('SCREW')) groupCode = 'HW';
           else if (g.includes('CONSUMABLE')) groupCode = 'CM';
           else if (g.includes('ELECTRICAL')) groupCode = 'EL';
           else if (g.includes('STEEL')) groupCode = 'ST';
           else if (g.includes('RAW')) groupCode = 'RM';
           else if (g.includes('MACHINE') || g.includes('SPARE')) groupCode = 'HL';
+          else if (g.includes('PACKAGING') || g.includes('BOX')) groupCode = 'PK';
+          else if (g.includes('CORE')) groupCode = 'CR';
+          else if (g.includes('CLIP') || g.includes('SEAL')) groupCode = 'SL';
           else if (g.length >= 2) groupCode = g.substring(0, 2);
         }
       } catch (err) {
@@ -528,10 +538,8 @@ router.post('/', async (req: Request, res: Response) => {
       });
 
       if (existingProductBySku) {
-        return res.status(409).json({
-          error: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`,
-          message: `SKU "${trimmedSku}" already exists (${existingProductBySku.name}). Duplicate SKUs are not allowed.`
-        });
+        // If the requested SKU already exists, generate the next unique non-colliding SKU
+        data.sku = await generateNextItemCodeBackend(data.company, data.categoryId, undefined, data.name);
       }
     }
 
@@ -542,7 +550,7 @@ router.post('/', async (req: Request, res: Response) => {
       return isNaN(parsed) || parsed <= 0 ? null : parsed;
     };
 
-    const finalSku = await generateNextItemCodeBackend(data.company, data.categoryId, data.sku);
+    const finalSku = await generateNextItemCodeBackend(data.company, data.categoryId, data.sku, data.name);
 
     const parsedCatId = parseId(data.categoryId);
     let validCategoryId: number | null = null;
