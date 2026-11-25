@@ -71,7 +71,7 @@ router.get('/:id', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR')
 });
 
 // POST create transporter
-router.post('/', authorizeRole('PLANT_ADMIN'), async (req: Request, res: Response) => {
+router.post('/', authorizeRole('PLANT_ADMIN', 'SALES_REP', 'SHIFT_SUPERVISOR'), async (req: Request, res: Response) => {
   try {
     const {
       name,

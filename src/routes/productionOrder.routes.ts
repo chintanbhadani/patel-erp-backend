@@ -476,18 +476,66 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
     const { assignedMachine, status, priority, sequenceOrder, completionPercentage } = req.body;
 
     const dataToUpdate: any = {};
-    if (assignedMachine !== undefined) dataToUpdate.assignedMachine = assignedMachine;
+    if (assignedMachine !== undefined) dataToUpdate.assignedMachine = String(assignedMachine);
     if (status !== undefined) dataToUpdate.status = status;
     if (priority !== undefined) dataToUpdate.priority = priority;
     if (sequenceOrder !== undefined) dataToUpdate.sequenceOrder = Number(sequenceOrder);
     if (completionPercentage !== undefined) dataToUpdate.completionPercentage = Number(completionPercentage);
 
-    const updated = await prisma.productionOrderItem.update({
-      where: { id: itemId },
-      data: dataToUpdate
+    // Try finding by productionOrderItem id
+    const existingItem = await prisma.productionOrderItem.findUnique({
+      where: { id: itemId }
     });
 
-    res.json({ success: true, item: updated });
+    let updatedItem: any = null;
+
+    if (existingItem) {
+      updatedItem = await prisma.productionOrderItem.update({
+        where: { id: itemId },
+        data: dataToUpdate
+      });
+
+      // Synchronize parent productionOrder assignedMachine as well
+      if (assignedMachine && existingItem.productionOrderId) {
+        await prisma.productionOrder.update({
+          where: { id: existingItem.productionOrderId },
+          data: { assignedMachine: String(assignedMachine) }
+        }).catch(err => console.warn('Could not sync parent order machine:', err.message));
+      }
+    } else {
+      // Check if itemId is actually an order ID (e.g. "po-uuid" or "uuid")
+      const rawOrderId = itemId.replace(/^po-/, '');
+      const existingOrder = await prisma.productionOrder.findFirst({
+        where: {
+          OR: [{ id: rawOrderId }, { orderNumber: rawOrderId }, { id: itemId }]
+        },
+        include: { items: true }
+      });
+
+      if (existingOrder) {
+        const orderUpdate: any = {};
+        if (assignedMachine !== undefined) orderUpdate.assignedMachine = String(assignedMachine);
+        if (status !== undefined) orderUpdate.status = status;
+
+        await prisma.productionOrder.update({
+          where: { id: existingOrder.id },
+          data: orderUpdate
+        });
+
+        // Also update its items if any
+        if (existingOrder.items && existingOrder.items.length > 0) {
+          await prisma.productionOrderItem.updateMany({
+            where: { productionOrderId: existingOrder.id },
+            data: dataToUpdate
+          });
+        }
+        updatedItem = { id: itemId, ...dataToUpdate };
+      } else {
+        return res.status(404).json({ error: `Item or order not found for ID ${itemId}` });
+      }
+    }
+
+    res.json({ success: true, item: updatedItem });
   } catch (error: any) {
     console.error('Error updating production order item planning:', error);
     res.status(500).json({ error: error.message || 'Failed to update item' });
