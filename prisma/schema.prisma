@@ -728,6 +728,11 @@ model ProductionOrderItem {
   colour                  String?
   coreSize                String?
   surface                 String?
+  width                   Float?
+  thickness               Float?
+  grade                   String?
+  jointStatus             String?         @default("No Joint")
+  dieSelection            String?
   noOfArticles            Int?
   netWtArticles           Float?
   mtrsPerArticles         Float?
