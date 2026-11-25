@@ -483,10 +483,14 @@ model StockLedger {
   runningBalance Int
   invoiceId      String?
   invoice        Invoice? @relation(fields: [invoiceId], references: [id])
-  grnId          String?
-  grn            Grn?     @relation(fields: [grnId], references: [id])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  grnId               String?
+  grn                 Grn?             @relation(fields: [grnId], references: [id])
+  productionOrderId   String?
+  productionOrder     ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  reference           String?
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
 model Payment {
@@ -718,6 +722,7 @@ model ProductionOrder {
   createdBy               String?
   updatedAt               DateTime                @updatedAt
   items                   ProductionOrderItem[]
+  stockLedgers            StockLedger[]
 }
 
 model ProductionOrderItem {
@@ -751,6 +756,11 @@ model ProductionOrderItem {
   gstPercent              Float?          @default(18.0)
   freightTerms            String?         @default("PAID")
   totalAmount             Float?
+  isStockPosted           Boolean         @default(false)
+  stockPostedAt           DateTime?
+  stockEntryId            String?
+  actualProducedQty       Float?
+  destinationBin          String?
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 }

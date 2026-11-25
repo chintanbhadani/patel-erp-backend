@@ -542,4 +542,321 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
   }
 });
 
+// POST Transfer Finished Production Item to Stock (Bin Report & Stock Ledger)
+router.post('/items/:itemId/post-to-stock', async (req: Request, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const { 
+      actualQty, 
+      actualWeightKg, 
+      targetBin = 'D-31', 
+      notes, 
+      forceReprompt = false 
+    } = req.body;
+
+    // 1. Locate Item
+    let item = await prisma.productionOrderItem.findUnique({
+      where: { id: itemId },
+      include: {
+        productionOrder: {
+          include: { items: true, client: true }
+        }
+      }
+    });
+
+    if (!item) {
+      // Check if itemId is formatted like po-orderId-srNo
+      const parts = itemId.split('-');
+      if (itemId.startsWith('po-') && parts.length >= 3) {
+        const srNo = parseInt(parts[parts.length - 1], 10);
+        const orderId = parts.slice(1, parts.length - 1).join('-');
+        item = await prisma.productionOrderItem.findFirst({
+          where: {
+            productionOrderId: orderId,
+            srNo: !isNaN(srNo) ? srNo : undefined
+          },
+          include: {
+            productionOrder: {
+              include: { items: true, client: true }
+            }
+          }
+        });
+      }
+    }
+
+    if (!item) {
+      return res.status(404).json({ error: `Production item not found for ID ${itemId}` });
+    }
+
+    if (item.isStockPosted && !forceReprompt) {
+      return res.status(400).json({ 
+        error: `Stock has already been posted for this item on ${item.stockPostedAt?.toLocaleString() || 'earlier date'}.`,
+        alreadyPosted: true,
+        item
+      });
+    }
+
+    const qtyToPost = Math.round(Number(actualQty) || Number(item.quantity) || Number(item.noOfArticles) || 1);
+    if (qtyToPost <= 0) {
+      return res.status(400).json({ error: 'Quantity to post must be greater than zero.' });
+    }
+
+    // 2. Resolve Product in Product table
+    let product: any = null;
+    const descText = `${item.sizeLength || ''} ${item.dieSelection || ''}`;
+    const skuMatch = descText.match(/\[([A-Za-z0-9_-]+)\]/);
+    const candidateSku = skuMatch ? skuMatch[1].trim() : null;
+
+    if (candidateSku) {
+      product = await prisma.product.findFirst({
+        where: {
+          OR: [
+            { sku: { equals: candidateSku, mode: 'insensitive' } },
+            { sku: { equals: candidateSku.replace(/O/g, '0'), mode: 'insensitive' } },
+            { sku: { equals: candidateSku.replace(/0/g, 'O'), mode: 'insensitive' } }
+          ]
+        }
+      });
+    }
+
+    // Match by exact or partial name
+    if (!product && item.sizeLength) {
+      const cleanName = item.sizeLength.replace(/\[.*?\]\s*\|\s*/, '').trim();
+      product = await prisma.product.findFirst({
+        where: {
+          OR: [
+            { name: { equals: cleanName, mode: 'insensitive' } },
+            { name: { contains: cleanName, mode: 'insensitive' } },
+            { sku: { equals: cleanName, mode: 'insensitive' } }
+          ]
+        }
+      });
+    }
+
+    // Match by dimensions
+    if (!product && (item.width || item.thickness)) {
+      product = await prisma.product.findFirst({
+        where: {
+          partOf: 'FINISHED GOODS',
+          ...(item.width ? { rollWidth: item.width } : {}),
+          ...(item.thickness ? { thickness: item.thickness } : {})
+        }
+      });
+    }
+
+    // Auto-create Product if not yet in Product Master
+    if (!product) {
+      const autoSku = candidateSku || `PSR${String(Math.floor(1000 + Math.random() * 9000))}`;
+      const petCategory = await prisma.category.findFirst({
+        where: { name: { contains: 'STRAP', mode: 'insensitive' } }
+      });
+      const pcsUnit = await prisma.unit.findFirst({
+        where: { name: { in: ['Roll', 'Rolls', 'Nos', 'NOS', 'Pcs'] } }
+      });
+
+      product = await prisma.product.create({
+        data: {
+          sku: autoSku,
+          name: item.sizeLength ? item.sizeLength.replace(/\[.*?\]\s*\|\s*/, '').trim() : `${item.width || 15} X ${item.thickness || 0.5} PET Strap Roll`,
+          partOf: 'FINISHED GOODS',
+          subPartOf: 'WORKSHOP',
+          quantity: 0,
+          cost_price: 120,
+          selling_price: 150,
+          min_stock: 20,
+          location: targetBin || 'D-31',
+          categoryId: petCategory?.id || null,
+          unitId: pcsUnit?.id || null,
+          activityType: 'Manufacturing',
+          maintainStock: true,
+          status: 'Active',
+          rollWidth: item.width || 15,
+          thickness: item.thickness || 0.5,
+          rollSurface: item.surface || 'Roll Emboss',
+          color: item.colour || 'Green',
+          rollWeight: item.netWtArticles || 10
+        }
+      });
+    }
+
+    // 3. Post to StockLedger & update Product Quantity within transaction
+    const finalLocation = targetBin || product.location || 'D-31';
+    const poRef = item.productionOrder?.orderNumber || item.productionOrder?.id || `PO-${item.id.slice(0, 8)}`;
+    const customer = item.productionOrder?.customerName || item.productionOrder?.client?.companyName || 'Customer';
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Calculate current running balance
+      const balanceAgg: any = await tx.$queryRaw`
+        SELECT COALESCE(SUM("quantityChange"), 0) AS balance_before
+        FROM "StockLedger"
+        WHERE "productId" = ${product.id}
+      `;
+      const balanceBefore = balanceAgg[0]?.balance_before
+        ? Number(balanceAgg[0].balance_before)
+        : Number(product.quantity || 0);
+
+      const newRunningBalance = balanceBefore + qtyToPost;
+
+      // Create StockLedger entry
+      const stockEntry = await tx.stockLedger.create({
+        data: {
+          productId: product.id,
+          date: new Date(),
+          type: 'MANUFACTURE',
+          quantityChange: qtyToPost,
+          runningBalance: newRunningBalance,
+          productionOrderId: item.productionOrderId,
+          reference: poRef,
+          notes: notes || `Production completed on ${item.assignedMachine || 'Machine 1'} for ${customer}`
+        }
+      });
+
+      // Update Product Stock & Location
+      const updatedProduct = await tx.product.update({
+        where: { id: product.id },
+        data: {
+          quantity: { increment: qtyToPost },
+          location: finalLocation
+        }
+      });
+
+      // Update ProductionOrderItem
+      const updatedItem = await tx.productionOrderItem.update({
+        where: { id: item.id },
+        data: {
+          status: 'Completed',
+          completionPercentage: 100,
+          isStockPosted: true,
+          stockPostedAt: new Date(),
+          stockEntryId: stockEntry.id,
+          actualProducedQty: qtyToPost,
+          destinationBin: finalLocation
+        }
+      });
+
+      // Check if all items in the order are completed
+      if (item.productionOrder?.items) {
+        const otherItems = item.productionOrder.items.filter(it => it.id !== item.id);
+        const allCompleted = otherItems.every(it => it.status === 'Completed');
+        if (allCompleted) {
+          await tx.productionOrder.update({
+            where: { id: item.productionOrderId },
+            data: { status: 'Completed' }
+          });
+        }
+      }
+
+      return { stockEntry, updatedProduct, updatedItem };
+    });
+
+    // Record activity log
+    try {
+      await prisma.activityLog.create({
+        data: {
+          entityType: 'ProductionOrderItem',
+          entityId: item.id,
+          action: 'Transferred finished goods to stock',
+          description: `Transferred ${qtyToPost} units of ${product.sku} to Bin ${finalLocation} (Stock Ledger ID: ${result.stockEntry.id})`
+        }
+      });
+    } catch (e) {
+      console.warn('Could not record activity log:', e);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully transferred ${qtyToPost} units to Bin ${finalLocation} and recorded in Stock Ledger!`,
+      item: result.updatedItem,
+      product: result.updatedProduct,
+      stockEntry: result.stockEntry
+    });
+  } catch (error: any) {
+    console.error('Error posting production item to stock:', error);
+    res.status(500).json({ error: error.message || 'Failed to post production item to stock' });
+  }
+});
+
+// POST Revert Finished Production Item Stock Transfer
+router.post('/items/:itemId/revert-stock', async (req: Request, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const item = await prisma.productionOrderItem.findUnique({
+      where: { id: itemId },
+      include: { productionOrder: true }
+    });
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (!item.isStockPosted) {
+      return res.json({ success: true, message: 'Item had no posted stock' });
+    }
+
+    const qtyToRevert = Math.round(Number(item.actualProducedQty) || Number(item.quantity) || 1);
+
+    let ledgerEntry = item.stockEntryId ? await prisma.stockLedger.findUnique({ where: { id: item.stockEntryId } }) : null;
+    let productId = ledgerEntry?.productId;
+
+    if (!productId) {
+      const latest = await prisma.stockLedger.findFirst({
+        where: {
+          productionOrderId: item.productionOrderId,
+          type: 'MANUFACTURE'
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      productId = latest?.productId;
+    }
+
+    if (productId) {
+      await prisma.$transaction(async (tx) => {
+        const balanceAgg: any = await tx.$queryRaw`
+          SELECT COALESCE(SUM("quantityChange"), 0) AS balance_before
+          FROM "StockLedger"
+          WHERE "productId" = ${productId}
+        `;
+        const balanceBefore = balanceAgg[0]?.balance_before ? Number(balanceAgg[0].balance_before) : 0;
+        const newRunningBalance = Math.max(0, balanceBefore - qtyToRevert);
+
+        await tx.stockLedger.create({
+          data: {
+            productId,
+            date: new Date(),
+            type: 'ADJUSTMENT',
+            quantityChange: -qtyToRevert,
+            runningBalance: newRunningBalance,
+            productionOrderId: item.productionOrderId,
+            reference: `REV-${item.productionOrder?.orderNumber || item.productionOrderId}`,
+            notes: `Reversal of production stock transfer for item reopened into In Production`
+          }
+        });
+
+        await tx.product.update({
+          where: { id: productId },
+          data: {
+            quantity: { decrement: qtyToRevert }
+          }
+        });
+      });
+    }
+
+    const updated = await prisma.productionOrderItem.update({
+      where: { id: itemId },
+      data: {
+        isStockPosted: false,
+        stockPostedAt: null,
+        stockEntryId: null,
+        status: 'In Production',
+        completionPercentage: 80
+      }
+    });
+
+    res.json({ success: true, message: 'Stock reversed and item reopened', item: updated });
+  } catch (error: any) {
+    console.error('Error reverting stock:', error);
+    res.status(500).json({ error: error.message || 'Failed to revert stock' });
+  }
+});
+
 export default router;

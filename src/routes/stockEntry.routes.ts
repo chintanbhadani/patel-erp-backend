@@ -27,12 +27,15 @@ router.get('/', async (req: Request, res: Response) => {
       whereConditions.push({
         OR: [
           { type: { contains: q, mode: 'insensitive' } },
+          { reference: { contains: q, mode: 'insensitive' } },
           { product: { name: { contains: q, mode: 'insensitive' } } },
           { product: { sku: { contains: q, mode: 'insensitive' } } },
           { grn: { grnNumber: { contains: q, mode: 'insensitive' } } },
           { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } },
           { invoice: { client: { companyName: { contains: q, mode: 'insensitive' } } } },
           { invoice: { supplier: { name: { contains: q, mode: 'insensitive' } } } },
+          { productionOrder: { orderNumber: { contains: q, mode: 'insensitive' } } },
+          { productionOrder: { customerName: { contains: q, mode: 'insensitive' } } },
         ],
       });
     }
@@ -45,6 +48,7 @@ router.get('/', async (req: Request, res: Response) => {
       ],
       include: {
         product: true,
+        productionOrder: true,
         grn: {
           include: {
             supplier: true
@@ -79,6 +83,7 @@ router.get('/:id', async (req: Request, res: Response) => {
             unit: true,
           },
         },
+        productionOrder: true,
         grn: {
           include: {
             supplier: true,
