@@ -712,6 +712,7 @@ model ProductionOrder {
   status                  String                  @default("Draft")
   assignedTo              String?
   tags                    String?
+  assignedMachine         String?                 @default("M-01")
   attachments             Json?
   createdAt               DateTime                @default(now())
   createdBy               String?
@@ -742,6 +743,11 @@ model ProductionOrderItem {
   ratePerUnit             Float?
   breakingLoad            String?
   palletQuantity          String?
+  assignedMachine         String?         @default("M-01")
+  priority                String?         @default("Normal")
+  status                  String?         @default("Queued")
+  completionPercentage    Float?          @default(0)
+  sequenceOrder           Int?            @default(1)
   gstPercent              Float?          @default(18.0)
   freightTerms            String?         @default("PAID")
   totalAmount             Float?

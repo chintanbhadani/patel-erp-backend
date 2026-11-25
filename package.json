@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
+    "clear:data": "node scripts/clear-data.js",
     "build": "tsc",
     "postinstall": "prisma generate"
   },
