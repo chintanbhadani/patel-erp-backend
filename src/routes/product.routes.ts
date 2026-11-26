@@ -130,18 +130,52 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (search) {
       const q = String(search).trim();
-      AND.push({
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { sku: { contains: q, mode: 'insensitive' } },
-          { partOf: { contains: q, mode: 'insensitive' } },
-          { company: { contains: q, mode: 'insensitive' } },
-          { location: { contains: q, mode: 'insensitive' } },
-          { assignedTo: { contains: q, mode: 'insensitive' } },
-          { tags: { contains: q, mode: 'insensitive' } },
-          { category: { name: { contains: q, mode: 'insensitive' } } },
-        ]
-      });
+      const numQ = parseFloat(q);
+      const isNum = !isNaN(numQ);
+      const dimMatch = q.match(/^(\d+(?:\.\d+)?)\s*[xX*]\s*(\d+(?:\.\d+)?)$/);
+
+      const searchOr: any[] = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        { partOf: { contains: q, mode: 'insensitive' } },
+        { company: { contains: q, mode: 'insensitive' } },
+        { location: { contains: q, mode: 'insensitive' } },
+        { assignedTo: { contains: q, mode: 'insensitive' } },
+        { tags: { contains: q, mode: 'insensitive' } },
+        { category: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+
+      if (isNum) {
+        searchOr.push({ rollWidth: numQ });
+        searchOr.push({ width: numQ });
+        searchOr.push({ thickness: numQ });
+      }
+
+      if (dimMatch) {
+        const wTarget = parseFloat(dimMatch[1]);
+        const tTarget = parseFloat(dimMatch[2]);
+        searchOr.push({
+          AND: [
+            { OR: [{ rollWidth: wTarget }, { width: wTarget }] },
+            { thickness: tTarget }
+          ]
+        });
+      }
+
+      AND.push({ OR: searchOr });
+    }
+
+    const widthQuery = req.query.width ? String(req.query.width).trim() : '';
+    if (widthQuery) {
+      const wNum = parseFloat(widthQuery);
+      if (!isNaN(wNum)) {
+        AND.push({
+          OR: [
+            { rollWidth: wNum },
+            { width: wNum }
+          ]
+        });
+      }
     }
 
     const skuQuery = String(id || sku || '').trim();
@@ -217,6 +251,7 @@ router.get('/', async (req: Request, res: Response) => {
           let targetKey = '';
           if (field === 'ID' || field === 'Item Code') targetKey = 'sku';
           else if (field === 'Item Name') targetKey = 'name';
+          else if (field === 'Width' || field === 'rollWidth') targetKey = 'rollWidth';
           else if (field === 'Item Group') targetKey = 'category';
           else if (field === 'Part Of') targetKey = 'partOf';
           else if (field === 'Bin Location') targetKey = 'location';
@@ -237,6 +272,17 @@ router.get('/', async (req: Request, res: Response) => {
               AND.push({ disabled: isDisabled });
             } else if (op === 'Not Equals') {
               AND.push({ disabled: !isDisabled });
+            }
+          } else if (targetKey === 'rollWidth') {
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+              if (op === 'Equals') {
+                AND.push({ OR: [{ rollWidth: num }, { width: num }] });
+              } else if (op === 'Not Equals') {
+                AND.push({ AND: [{ rollWidth: { not: num } }, { width: { not: num } }] });
+              } else {
+                AND.push({ OR: [{ rollWidth: num }, { width: num }] });
+              }
             }
           } else if (targetKey) {
             if (op === 'Equals') {
@@ -325,12 +371,15 @@ const SAMPLE_BIN_REPORT: Array<{
   warehouse: string;
   assignedTo?: string;
   tags?: string;
+  rollWidth?: number | null;
+  width?: number | null;
+  thickness?: number | null;
 }> = [];
 
 // GET Bin Report (Stock Balance per item per warehouse)
 router.get('/bin-report', async (req: Request, res: Response) => {
   try {
-    const { search, warehouse, itemGroup, partOf } = req.query;
+    const { search, warehouse, itemGroup, partOf, width } = req.query;
 
     const dbProducts = await prisma.product.findMany({
       include: {
@@ -351,8 +400,9 @@ router.get('/bin-report', async (req: Request, res: Response) => {
       warehouse: p.location || 'Main Store - NCL',
       assignedTo: p.assignedTo || 'Administrator',
       tags: p.tags || '',
-      rollWidth: p.rollWidth,
-      thickness: p.thickness
+      rollWidth: p.rollWidth ?? (p as any).width ?? 0,
+      width: (p as any).width ?? p.rollWidth ?? 0,
+      thickness: p.thickness ?? 0
     }));
 
     // Merge database items with sample items (avoiding duplicate SKUs)
@@ -363,14 +413,53 @@ router.get('/bin-report', async (req: Request, res: Response) => {
     // Apply filtering
     if (search) {
       const q = String(search).toLowerCase().trim();
-      list = list.filter(item =>
-        item.itemCode.toLowerCase().includes(q) ||
-        item.itemName.toLowerCase().includes(q) ||
-        item.itemGroup.toLowerCase().includes(q) ||
-        item.partOf.toLowerCase().includes(q) ||
-        item.subPartOf.toLowerCase().includes(q) ||
-        item.warehouse.toLowerCase().includes(q)
-      );
+      const numQ = parseFloat(q);
+      const isNum = !isNaN(numQ);
+      const dimMatch = q.match(/^(\d+(?:\.\d+)?)\s*[xX*]\s*(\d+(?:\.\d+)?)$/);
+
+      list = list.filter(item => {
+        const widthVal = item.rollWidth ?? (item as any).width;
+        const widthStr = widthVal !== undefined && widthVal !== null ? String(widthVal).toLowerCase() : '';
+        const thickStr = item.thickness !== undefined && item.thickness !== null ? String(item.thickness).toLowerCase() : '';
+        const dimStr = widthStr && thickStr ? `${widthStr} x ${thickStr}` : '';
+        const dimStrNoSpace = widthStr && thickStr ? `${widthStr}x${thickStr}` : '';
+
+        const textMatch =
+          item.itemCode.toLowerCase().includes(q) ||
+          item.itemName.toLowerCase().includes(q) ||
+          item.itemGroup.toLowerCase().includes(q) ||
+          item.partOf.toLowerCase().includes(q) ||
+          item.subPartOf.toLowerCase().includes(q) ||
+          item.warehouse.toLowerCase().includes(q) ||
+          (dimStr && dimStr.includes(q)) ||
+          (dimStrNoSpace && dimStrNoSpace.includes(q)) ||
+          (widthStr && widthStr.includes(q)) ||
+          (thickStr && thickStr.includes(q));
+
+        if (textMatch) return true;
+
+        if (dimMatch) {
+          const wTarget = parseFloat(dimMatch[1]);
+          const tTarget = parseFloat(dimMatch[2]);
+          if (widthVal === wTarget && item.thickness === tTarget) return true;
+        }
+
+        if (isNum && (widthVal === numQ || item.thickness === numQ)) return true;
+
+        return false;
+      });
+    }
+
+    if (width) {
+      const wQ = String(width).toLowerCase().trim();
+      const wNum = parseFloat(wQ);
+      list = list.filter(item => {
+        const widthVal = item.rollWidth ?? (item as any).width;
+        const widthStr = widthVal !== undefined && widthVal !== null ? String(widthVal).toLowerCase() : '';
+        if (widthStr.includes(wQ)) return true;
+        if (!isNaN(wNum) && widthVal === wNum) return true;
+        return false;
+      });
     }
 
     if (warehouse) {

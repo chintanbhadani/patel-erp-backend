@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 // GET all stock entries / ledger records
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { search, type, productId } = req.query;
+    const { search, type, productId, width } = req.query;
 
     const whereConditions: any[] = [];
 
@@ -22,21 +22,60 @@ router.get('/', async (req: Request, res: Response) => {
       whereConditions.push({ productId: productId as string });
     }
 
+    if (width) {
+      const wNum = parseFloat(String(width).trim());
+      if (!isNaN(wNum)) {
+        whereConditions.push({
+          product: {
+            OR: [
+              { rollWidth: wNum },
+              { width: wNum }
+            ]
+          }
+        });
+      }
+    }
+
     if (search) {
       const q = (search as string).trim();
+      const numQ = parseFloat(q);
+      const isNum = !isNaN(numQ);
+      const dimMatch = q.match(/^(\d+(?:\.\d+)?)\s*[xX*]\s*(\d+(?:\.\d+)?)$/);
+
+      const searchOr: any[] = [
+        { type: { contains: q, mode: 'insensitive' } },
+        { reference: { contains: q, mode: 'insensitive' } },
+        { product: { name: { contains: q, mode: 'insensitive' } } },
+        { product: { sku: { contains: q, mode: 'insensitive' } } },
+        { grn: { grnNumber: { contains: q, mode: 'insensitive' } } },
+        { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } },
+        { invoice: { client: { companyName: { contains: q, mode: 'insensitive' } } } },
+        { invoice: { supplier: { name: { contains: q, mode: 'insensitive' } } } },
+        { productionOrder: { orderNumber: { contains: q, mode: 'insensitive' } } },
+        { productionOrder: { customerName: { contains: q, mode: 'insensitive' } } },
+      ];
+
+      if (isNum) {
+        searchOr.push({ product: { rollWidth: numQ } });
+        searchOr.push({ product: { width: numQ } });
+        searchOr.push({ product: { thickness: numQ } });
+      }
+
+      if (dimMatch) {
+        const wTarget = parseFloat(dimMatch[1]);
+        const tTarget = parseFloat(dimMatch[2]);
+        searchOr.push({
+          product: {
+            AND: [
+              { OR: [{ rollWidth: wTarget }, { width: wTarget }] },
+              { thickness: tTarget }
+            ]
+          }
+        });
+      }
+
       whereConditions.push({
-        OR: [
-          { type: { contains: q, mode: 'insensitive' } },
-          { reference: { contains: q, mode: 'insensitive' } },
-          { product: { name: { contains: q, mode: 'insensitive' } } },
-          { product: { sku: { contains: q, mode: 'insensitive' } } },
-          { grn: { grnNumber: { contains: q, mode: 'insensitive' } } },
-          { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } },
-          { invoice: { client: { companyName: { contains: q, mode: 'insensitive' } } } },
-          { invoice: { supplier: { name: { contains: q, mode: 'insensitive' } } } },
-          { productionOrder: { orderNumber: { contains: q, mode: 'insensitive' } } },
-          { productionOrder: { customerName: { contains: q, mode: 'insensitive' } } },
-        ],
+        OR: searchOr,
       });
     }
 
@@ -47,7 +86,12 @@ router.get('/', async (req: Request, res: Response) => {
         { createdAt: 'desc' },
       ],
       include: {
-        product: true,
+        product: {
+          include: {
+            category: true,
+            unit: true,
+          }
+        },
         productionOrder: true,
         grn: {
           include: {

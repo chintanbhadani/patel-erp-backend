@@ -1060,4 +1060,203 @@ router.post('/items/:itemId/revert-stock', async (req: Request, res: Response) =
   }
 });
 
+// POST Confirm Truck Loading & Dispatch (Subtract Stock from Bin & record in Stock Ledger)
+router.post('/:id/dispatch-truck', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      vehicleNo,
+      containerNo,
+      sealNo,
+      destinationPort,
+      transporterName,
+      driverName,
+      mobileNo,
+      lrNo,
+      orderType = 'Domestic',
+      palletPhotos = [],
+      containerDoorPhotoUrl,
+      dispatchNotes
+    } = req.body;
+
+    if (!vehicleNo) {
+      return res.status(400).json({ error: 'Vehicle / Truck number is required for dispatch.' });
+    }
+
+    // Locate order
+    const order = await prisma.productionOrder.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        client: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: `Production Order not found for ID ${id}` });
+    }
+
+    if (order.status === 'Dispatched') {
+      return res.status(400).json({ error: 'This order has already been dispatched and stock has already been subtracted.' });
+    }
+
+    // Execute transaction to subtract stock for all items in the order
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const items = order.items || [];
+      const poRef = order.orderNumber || order.id;
+
+      for (const item of items) {
+        const qtyToSubtract = Math.round(Number(item.actualProducedQty) || Number(item.quantity) || Number(item.noOfArticles) || 1);
+        if (qtyToSubtract <= 0) continue;
+
+        // Find linked product
+        let product: any = null;
+        const descText = `${item.sizeLength || ''} ${item.dieSelection || ''}`;
+        const skuMatch = descText.match(/\[([A-Za-z0-9_-]+)\]/);
+        const candidateSku = skuMatch ? skuMatch[1].trim() : null;
+
+        if (candidateSku) {
+          product = await tx.product.findFirst({
+            where: {
+              OR: [
+                { sku: { equals: candidateSku, mode: 'insensitive' } },
+                { sku: { equals: candidateSku.replace(/O/g, '0'), mode: 'insensitive' } },
+                { sku: { equals: candidateSku.replace(/0/g, 'O'), mode: 'insensitive' } }
+              ]
+            }
+          });
+        }
+
+        if (!product && item.sizeLength) {
+          const cleanName = item.sizeLength.replace(/\[.*?\]\s*\|\s*/, '').trim();
+          product = await tx.product.findFirst({
+            where: {
+              OR: [
+                { name: { equals: cleanName, mode: 'insensitive' } },
+                { name: { contains: cleanName, mode: 'insensitive' } },
+                { sku: { equals: cleanName, mode: 'insensitive' } }
+              ]
+            }
+          });
+        }
+
+        if (!product && (item.width || item.thickness)) {
+          product = await tx.product.findFirst({
+            where: {
+              partOf: 'FINISHED GOODS',
+              ...(item.width ? { rollWidth: item.width } : {}),
+              ...(item.thickness ? { thickness: item.thickness } : {})
+            }
+          });
+        }
+
+        if (product) {
+          // Calculate current balance
+          const balanceAgg: any = await tx.$queryRaw`
+            SELECT COALESCE(SUM("quantityChange"), 0) AS balance_before
+            FROM "StockLedger"
+            WHERE "productId" = ${product.id}
+          `;
+          const balanceBefore = balanceAgg[0]?.balance_before
+            ? Number(balanceAgg[0].balance_before)
+            : Number(product.quantity || 0);
+
+          const newRunningBalance = balanceBefore - qtyToSubtract;
+
+          // Record debit entry in StockLedger
+          await tx.stockLedger.create({
+            data: {
+              productId: product.id,
+              date: new Date(),
+              type: orderType === 'International (Export)' ? 'EXPORT_DISPATCH' : 'DISPATCH',
+              quantityChange: -qtyToSubtract,
+              runningBalance: newRunningBalance,
+              productionOrderId: order.id,
+              reference: `${poRef}${containerNo ? ` / Cont: ${containerNo}` : ''} / Trk: ${vehicleNo}`,
+              notes: dispatchNotes || `Dispatched on Truck ${vehicleNo}${containerNo ? ` (Container: ${containerNo}, Seal: ${sealNo || '-'})` : ''} to ${destinationPort || order.customerName} (${palletPhotos.length} pallets loaded)`
+            }
+          });
+
+          // Decrement product stock in Bin Inventory
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              quantity: { decrement: qtyToSubtract }
+            }
+          });
+        }
+      }
+
+      // Merge attachments with dispatch details
+      const existingAttachments = typeof order.attachments === 'object' && order.attachments !== null
+        ? order.attachments
+        : {};
+
+      const dispatchReport = {
+        orderType,
+        dispatchedAt: new Date().toISOString(),
+        vehicleNo,
+        containerNo: containerNo || null,
+        sealNo: sealNo || null,
+        destinationPort: destinationPort || null,
+        transporterName: transporterName || null,
+        driverName: driverName || null,
+        mobileNo: mobileNo || null,
+        lrNo: lrNo || null,
+        totalPallets: palletPhotos.length,
+        palletPhotos: palletPhotos,
+        containerDoorPhotoUrl: containerDoorPhotoUrl || null,
+        notes: dispatchNotes || null
+      };
+
+      const finalAttachments = {
+        ...existingAttachments,
+        dispatchReport
+      };
+
+      // Update ProductionOrder
+      return await tx.productionOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'Dispatched',
+          vehicleNo,
+          transporterName: transporterName || order.transporterName,
+          driverName: driverName || order.driverName,
+          mobileNo: mobileNo || order.mobileNo,
+          lrNo: lrNo || order.lrNo,
+          dispatchDate: new Date(),
+          attachments: finalAttachments
+        },
+        include: {
+          items: true,
+          client: true
+        }
+      });
+    });
+
+    // Record Activity Log
+    try {
+      await prisma.activityLog.create({
+        data: {
+          entityType: 'ProductionOrder',
+          entityId: order.id,
+          action: 'Truck Loading & Dispatch Confirmed',
+          description: `Dispatched order ${order.orderNumber} on Truck ${vehicleNo} (${palletPhotos.length} pallets, ${orderType}). Finished goods stock subtracted.`
+        }
+      });
+    } catch (e) {
+      console.warn('Could not record activity log on dispatch:', e);
+    }
+
+    res.json({
+      success: true,
+      message: `Truck dispatch confirmed! Inventory subtracted from Bin Report & recorded in Stock Ledger.`,
+      order: updatedOrder
+    });
+  } catch (error: any) {
+    console.error('Error confirming truck dispatch:', error);
+    res.status(500).json({ error: error.message || 'Failed to dispatch truck' });
+  }
+});
+
 export default router;
