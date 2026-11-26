@@ -24,6 +24,17 @@ function getFinancialYearSuffix(dateInput?: Date | string): string {
   return `${startYY}-${endYY}`;
 }
 
+// Normalize machine code (maps legacy M-01 -> EXT-01)
+export function normalizeMachineCode(code?: string | null): string {
+  if (!code) return 'EXT-01';
+  const c = String(code).trim().toUpperCase();
+  if (c === 'M-01' || c === 'M-1' || c === '1') return 'EXT-01';
+  if (c === 'M-02' || c === 'M-2' || c === '2') return 'EXT-02';
+  if (c === 'M-03' || c === 'M-3' || c === '3') return 'EXT-03';
+  if (c === 'M-04' || c === 'M-4' || c === '4') return 'EXT-04';
+  return c;
+}
+
 // Helper to compute live Production Status of an order
 export function computeOrderProductionStatus(order: any): {
   productionStatus: 'Completed' | 'In Production' | 'In Queue' | 'On Hold' | 'Draft';
@@ -31,7 +42,8 @@ export function computeOrderProductionStatus(order: any): {
   assignedMachine: string;
 } {
   const items = order.items || [];
-  const assignedMachine = order.assignedMachine || items[0]?.assignedMachine || 'M-01';
+  const rawMachine = order.assignedMachine || items[0]?.assignedMachine || 'EXT-01';
+  const assignedMachine = normalizeMachineCode(rawMachine);
 
   if (order.status === 'Draft') {
     return { productionStatus: 'Draft', productionProgress: 0, assignedMachine };
@@ -325,7 +337,7 @@ router.post('/', async (req: Request, res: Response) => {
         dispatchDate: data.dispatchDate ? new Date(data.dispatchDate) : undefined,
         status: data.status || 'Draft',
         assignedTo: data.assignedTo || 'Administrator',
-        assignedMachine: data.assignedMachine || 'M-01',
+        assignedMachine: normalizeMachineCode(data.assignedMachine),
         tags: data.tags || '',
         attachments: data.attachments || [],
         createdBy: data.createdBy || 'Admin',
@@ -341,7 +353,7 @@ router.post('/', async (req: Request, res: Response) => {
             grade: it.grade || '',
             jointStatus: it.jointStatus || it.rollJoint || 'No Joint',
             dieSelection: it.dieSelection || it.die || '',
-            assignedMachine: it.assignedMachine || data.assignedMachine || 'M-01',
+            assignedMachine: normalizeMachineCode(it.assignedMachine || data.assignedMachine),
             priority: it.priority || 'Normal',
             status: it.status || (data.status === 'Draft' ? 'Queued' : (data.status || 'Queued')),
             completionPercentage: it.completionPercentage !== undefined ? parseFloat(it.completionPercentage) : 0,
@@ -459,7 +471,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       dispatchDate: data.dispatchDate ? new Date(data.dispatchDate) : existing.dispatchDate,
       status: data.status || existing.status,
       assignedTo: data.assignedTo || existing.assignedTo,
-      assignedMachine: data.assignedMachine !== undefined ? data.assignedMachine : (existing as any).assignedMachine || 'M-01',
+      assignedMachine: normalizeMachineCode(data.assignedMachine !== undefined ? data.assignedMachine : (existing as any).assignedMachine),
       tags: data.tags !== undefined ? data.tags : existing.tags,
       attachments: data.attachments || existing.attachments
     };
@@ -477,7 +489,7 @@ router.put('/:id', async (req: Request, res: Response) => {
           grade: it.grade || '',
           jointStatus: it.jointStatus || it.rollJoint || 'No Joint',
           dieSelection: it.dieSelection || it.die || '',
-          assignedMachine: it.assignedMachine || data.assignedMachine || (existing as any).assignedMachine || 'M-01',
+          assignedMachine: normalizeMachineCode(it.assignedMachine || data.assignedMachine || (existing as any).assignedMachine),
           priority: it.priority || 'Normal',
           status: it.status || (data.status === 'Draft' ? 'Queued' : (data.status || 'Queued')),
           completionPercentage: it.completionPercentage !== undefined ? parseFloat(it.completionPercentage) : 0,
