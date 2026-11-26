@@ -24,6 +24,47 @@ function getFinancialYearSuffix(dateInput?: Date | string): string {
   return `${startYY}-${endYY}`;
 }
 
+// Helper to compute live Production Status of an order
+export function computeOrderProductionStatus(order: any): {
+  productionStatus: 'Completed' | 'In Production' | 'In Queue' | 'On Hold' | 'Draft';
+  productionProgress: number;
+  assignedMachine: string;
+} {
+  const items = order.items || [];
+  const assignedMachine = order.assignedMachine || items[0]?.assignedMachine || 'M-01';
+
+  if (order.status === 'Draft') {
+    return { productionStatus: 'Draft', productionProgress: 0, assignedMachine };
+  }
+
+  if (items.length === 0) {
+    if (order.status === 'Completed') return { productionStatus: 'Completed', productionProgress: 100, assignedMachine };
+    if (order.status === 'In Production') return { productionStatus: 'In Production', productionProgress: 50, assignedMachine };
+    return { productionStatus: order.status === 'Submitted' ? 'In Queue' : 'Draft', productionProgress: 0, assignedMachine };
+  }
+
+  const completedCount = items.filter((i: any) => i.status === 'Completed' || (i.completionPercentage || 0) >= 100).length;
+  const inProdCount = items.filter((i: any) => i.status === 'In Production' || ((i.completionPercentage || 0) > 0 && (i.completionPercentage || 0) < 100)).length;
+  const onHoldCount = items.filter((i: any) => i.status === 'On Hold').length;
+
+  const totalProgress = items.reduce((sum: number, it: any) => sum + (it.completionPercentage || 0), 0);
+  const avgProgress = Math.round(totalProgress / items.length);
+
+  if (order.status === 'Completed' || (items.length > 0 && completedCount === items.length)) {
+    return { productionStatus: 'Completed', productionProgress: 100, assignedMachine };
+  }
+
+  if (inProdCount > 0 || completedCount > 0 || avgProgress > 0) {
+    return { productionStatus: 'In Production', productionProgress: avgProgress || 10, assignedMachine };
+  }
+
+  if (onHoldCount > 0) {
+    return { productionStatus: 'On Hold', productionProgress: avgProgress, assignedMachine };
+  }
+
+  return { productionStatus: 'In Queue', productionProgress: 0, assignedMachine };
+}
+
 // Helper to generate next Order Number: PO/CHE-OIIP/xxxx/26-27
 async function generateNextOrderNumber(dateStr?: string): Promise<string> {
   const fy = getFinancialYearSuffix(dateStr);
@@ -108,24 +149,30 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    const formatted = orders.map(o => ({
-      ...o,
-      orderNumber: o.orderNumber || o.id,
-      orderSheetDate: o.orderSheetDate ? o.orderSheetDate.toISOString().split('T')[0] : '',
-      poDate: o.poDate ? o.poDate.toISOString().split('T')[0] : '',
-      dispatchDate: o.dispatchDate ? o.dispatchDate.toISOString().split('T')[0] : '',
-      lrDate: o.lrDate ? o.lrDate.toISOString().split('T')[0] : '',
-      buyerBillingAddress: o.billingAddress || '',
-      consigneeDeliveryAddress: o.consigneeAddress || '',
-      items: (o.items || []).map((it: any) => ({
-        ...it,
-        strapSizeLength: it.sizeLength || it.strapSizeLength || '',
-        color: it.colour || it.color || 'Green',
-        netWtOfArticles: it.netWtArticles ?? it.netWtOfArticles ?? 0,
-        qty: it.quantity ?? it.qty ?? 0,
-        palletQty: it.palletQuantity || it.palletQty || ''
-      }))
-    }));
+    const formatted = orders.map(o => {
+      const prod = computeOrderProductionStatus(o);
+      return {
+        ...o,
+        orderNumber: o.orderNumber || o.id,
+        productionStatus: prod.productionStatus,
+        productionProgress: prod.productionProgress,
+        assignedMachine: prod.assignedMachine,
+        orderSheetDate: o.orderSheetDate ? o.orderSheetDate.toISOString().split('T')[0] : '',
+        poDate: o.poDate ? o.poDate.toISOString().split('T')[0] : '',
+        dispatchDate: o.dispatchDate ? o.dispatchDate.toISOString().split('T')[0] : '',
+        lrDate: o.lrDate ? o.lrDate.toISOString().split('T')[0] : '',
+        buyerBillingAddress: o.billingAddress || '',
+        consigneeDeliveryAddress: o.consigneeAddress || '',
+        items: (o.items || []).map((it: any) => ({
+          ...it,
+          strapSizeLength: it.sizeLength || it.strapSizeLength || '',
+          color: it.colour || it.color || 'Green',
+          netWtOfArticles: it.netWtArticles ?? it.netWtOfArticles ?? 0,
+          qty: it.quantity ?? it.qty ?? 0,
+          palletQty: it.palletQuantity || it.palletQty || ''
+        }))
+      };
+    });
 
     res.json(formatted);
   } catch (error: any) {
@@ -155,9 +202,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Production Order not found' });
     }
 
+    const prod = computeOrderProductionStatus(order);
+
     res.json({
       ...order,
       orderNumber: order.orderNumber || order.id,
+      productionStatus: prod.productionStatus,
+      productionProgress: prod.productionProgress,
+      assignedMachine: prod.assignedMachine,
       orderSheetDate: order.orderSheetDate ? order.orderSheetDate.toISOString().split('T')[0] : '',
       poDate: order.poDate ? order.poDate.toISOString().split('T')[0] : '',
       dispatchDate: order.dispatchDate ? order.dispatchDate.toISOString().split('T')[0] : '',
@@ -490,17 +542,41 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
     let updatedItem: any = null;
 
     if (existingItem) {
+      // Prevent restarting completed item production unless explicitly authorized via allowRestart
+      if (existingItem.status === 'Completed' && status && status !== 'Completed' && !req.body.allowRestart) {
+        return res.status(400).json({ 
+          error: `Production for this item is already completed. Once complete, production cannot be restarted.`,
+          isCompleted: true
+        });
+      }
+
       updatedItem = await prisma.productionOrderItem.update({
         where: { id: itemId },
         data: dataToUpdate
       });
 
-      // Synchronize parent productionOrder assignedMachine as well
-      if (assignedMachine && existingItem.productionOrderId) {
+      // Synchronize parent productionOrder status and machine
+      if (existingItem.productionOrderId) {
+        const orderItems = await prisma.productionOrderItem.findMany({
+          where: { productionOrderId: existingItem.productionOrderId }
+        });
+
+        const allDone = orderItems.length > 0 && orderItems.every(i => i.status === 'Completed' || (i.completionPercentage || 0) >= 100);
+        const anyRunning = orderItems.some(i => i.status === 'In Production' || ((i.completionPercentage || 0) > 0 && (i.completionPercentage || 0) < 100));
+        const anyQueued = orderItems.some(i => i.status === 'Queued' || (!i.status && i.assignedMachine));
+
+        let parentStatus: string = 'In Queue';
+        if (allDone) parentStatus = 'Completed';
+        else if (anyRunning) parentStatus = 'In Production';
+        else if (anyQueued) parentStatus = 'In Queue';
+
+        const parentUpdate: any = { status: parentStatus };
+        if (assignedMachine) parentUpdate.assignedMachine = String(assignedMachine);
+
         await prisma.productionOrder.update({
           where: { id: existingItem.productionOrderId },
-          data: { assignedMachine: String(assignedMachine) }
-        }).catch(err => console.warn('Could not sync parent order machine:', err.message));
+          data: parentUpdate
+        }).catch(err => console.warn('Could not sync parent order status:', err.message));
       }
     } else {
       // Check if itemId is actually an order ID (e.g. "po-uuid" or "uuid")
@@ -513,6 +589,13 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
       });
 
       if (existingOrder) {
+        if (existingOrder.status === 'Completed' && status && status !== 'Completed' && !req.body.allowRestart) {
+          return res.status(400).json({
+            error: `Production for order ${existingOrder.orderNumber || existingOrder.id} is already completed and cannot be restarted.`,
+            isCompleted: true
+          });
+        }
+
         const orderUpdate: any = {};
         if (assignedMachine !== undefined) orderUpdate.assignedMachine = String(assignedMachine);
         if (status !== undefined) orderUpdate.status = status;
