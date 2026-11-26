@@ -50,7 +50,8 @@ export function computeOrderProductionStatus(order: any): {
   const totalProgress = items.reduce((sum: number, it: any) => sum + (it.completionPercentage || 0), 0);
   const avgProgress = Math.round(totalProgress / items.length);
 
-  if (order.status === 'Completed' || (items.length > 0 && completedCount === items.length)) {
+  // If order has line items, line items dictate whether production is truly Completed
+  if (items.length > 0 && completedCount === items.length) {
     return { productionStatus: 'Completed', productionProgress: 100, assignedMachine };
   }
 
@@ -151,8 +152,24 @@ router.get('/', async (req: Request, res: Response) => {
 
     const formatted = orders.map(o => {
       const prod = computeOrderProductionStatus(o);
+
+      let effectiveStatus = o.status;
+      if (o.items && o.items.length > 0) {
+        const completedCount = o.items.filter((i: any) => i.status === 'Completed' || (i.completionPercentage || 0) >= 100).length;
+        if (completedCount === o.items.length) {
+          effectiveStatus = 'Completed';
+          if (o.status !== 'Completed') {
+            prisma.productionOrder.update({ where: { id: o.id }, data: { status: 'Completed' } }).catch(() => {});
+          }
+        } else if (o.status === 'Completed') {
+          effectiveStatus = prod.productionStatus === 'In Production' ? 'In Production' : 'Submitted';
+          prisma.productionOrder.update({ where: { id: o.id }, data: { status: effectiveStatus } }).catch(() => {});
+        }
+      }
+
       return {
         ...o,
+        status: effectiveStatus,
         orderNumber: o.orderNumber || o.id,
         productionStatus: prod.productionStatus,
         productionProgress: prod.productionProgress,
@@ -204,8 +221,23 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     const prod = computeOrderProductionStatus(order);
 
+    let effectiveStatus = order.status;
+    if (order.items && order.items.length > 0) {
+      const completedCount = order.items.filter((i: any) => i.status === 'Completed' || (i.completionPercentage || 0) >= 100).length;
+      if (completedCount === order.items.length) {
+        effectiveStatus = 'Completed';
+        if (order.status !== 'Completed') {
+          prisma.productionOrder.update({ where: { id: order.id }, data: { status: 'Completed' } }).catch(() => {});
+        }
+      } else if (order.status === 'Completed') {
+        effectiveStatus = prod.productionStatus === 'In Production' ? 'In Production' : 'Submitted';
+        prisma.productionOrder.update({ where: { id: order.id }, data: { status: effectiveStatus } }).catch(() => {});
+      }
+    }
+
     res.json({
       ...order,
+      status: effectiveStatus,
       orderNumber: order.orderNumber || order.id,
       productionStatus: prod.productionStatus,
       productionProgress: prod.productionProgress,
@@ -934,6 +966,13 @@ router.post('/items/:itemId/revert-stock', async (req: Request, res: Response) =
         completionPercentage: 80
       }
     });
+
+    if (item.productionOrderId) {
+      await prisma.productionOrder.update({
+        where: { id: item.productionOrderId },
+        data: { status: 'In Production' }
+      }).catch(err => console.warn('Could not sync parent order status on stock revert:', err.message));
+    }
 
     res.json({ success: true, message: 'Stock reversed and item reopened', item: updated });
   } catch (error: any) {
