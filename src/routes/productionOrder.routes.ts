@@ -42,12 +42,12 @@ export function computeOrderProductionStatus(order: any): {
   assignedMachine: string;
 } {
   const items = order.items || [];
-  const rawMachine = order.assignedMachine || items[0]?.assignedMachine || 'EXT-01';
-  const assignedMachine = normalizeMachineCode(rawMachine);
-
   if (order.status === 'Draft') {
-    return { productionStatus: 'Draft', productionProgress: 0, assignedMachine };
+    return { productionStatus: 'Draft', productionProgress: 0, assignedMachine: '' };
   }
+
+  const rawMachine = order.assignedMachine || items[0]?.assignedMachine || 'EXT-01';
+  const assignedMachine = normalizeMachineCode(rawMachine) || 'EXT-01';
 
   if (items.length === 0) {
     if (order.status === 'Completed') return { productionStatus: 'Completed', productionProgress: 100, assignedMachine };
@@ -185,7 +185,7 @@ router.get('/', async (req: Request, res: Response) => {
         orderNumber: o.orderNumber || o.id,
         productionStatus: prod.productionStatus,
         productionProgress: prod.productionProgress,
-        assignedMachine: prod.assignedMachine,
+        assignedMachine: effectiveStatus === 'Draft' ? '' : prod.assignedMachine,
         orderSheetDate: o.orderSheetDate ? o.orderSheetDate.toISOString().split('T')[0] : '',
         poDate: o.poDate ? o.poDate.toISOString().split('T')[0] : '',
         dispatchDate: o.dispatchDate ? o.dispatchDate.toISOString().split('T')[0] : '',
@@ -253,7 +253,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       orderNumber: order.orderNumber || order.id,
       productionStatus: prod.productionStatus,
       productionProgress: prod.productionProgress,
-      assignedMachine: prod.assignedMachine,
+      assignedMachine: effectiveStatus === 'Draft' ? '' : prod.assignedMachine,
       orderSheetDate: order.orderSheetDate ? order.orderSheetDate.toISOString().split('T')[0] : '',
       poDate: order.poDate ? order.poDate.toISOString().split('T')[0] : '',
       dispatchDate: order.dispatchDate ? order.dispatchDate.toISOString().split('T')[0] : '',
@@ -337,7 +337,7 @@ router.post('/', async (req: Request, res: Response) => {
         dispatchDate: data.dispatchDate ? new Date(data.dispatchDate) : undefined,
         status: data.status || 'Draft',
         assignedTo: data.assignedTo || 'Administrator',
-        assignedMachine: normalizeMachineCode(data.assignedMachine),
+        assignedMachine: (data.status === 'Draft' || !data.status) ? null : (normalizeMachineCode(data.assignedMachine) || 'EXT-01'),
         tags: data.tags || '',
         attachments: data.attachments || [],
         createdBy: data.createdBy || 'Admin',
@@ -353,9 +353,9 @@ router.post('/', async (req: Request, res: Response) => {
             grade: it.grade || '',
             jointStatus: it.jointStatus || it.rollJoint || 'No Joint',
             dieSelection: it.dieSelection || it.die || '',
-            assignedMachine: normalizeMachineCode(it.assignedMachine || data.assignedMachine),
+            assignedMachine: (data.status === 'Draft' || !data.status) ? null : (normalizeMachineCode(it.assignedMachine || data.assignedMachine) || 'EXT-01'),
             priority: it.priority || 'Normal',
-            status: it.status || (data.status === 'Draft' ? 'Queued' : (data.status || 'Queued')),
+            status: (data.status === 'Draft' || !data.status) ? 'Draft' : (it.status || 'Queued'),
             completionPercentage: it.completionPercentage !== undefined ? parseFloat(it.completionPercentage) : 0,
             sequenceOrder: it.sequenceOrder ? parseInt(it.sequenceOrder, 10) : index + 1,
             noOfArticles: it.noOfArticles ? parseInt(it.noOfArticles, 10) : 0,
@@ -416,11 +416,37 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Production Order not found' });
     }
 
+    if (existing.status === 'Completed' && data.assignedMachine !== undefined && !data.allowRestart) {
+      const newMach = normalizeMachineCode(data.assignedMachine);
+      const currMach = normalizeMachineCode((existing as any).assignedMachine || 'EXT-01');
+      if (newMach !== currMach) {
+        return res.status(400).json({
+          error: `Production for order ${existing.orderNumber || existing.id} is already completed. Machine cannot be changed.`,
+          isCompleted: true
+        });
+      }
+    }
+
     // Replace items only if items array is explicitly provided in the request
     if (data.items && Array.isArray(data.items)) {
       await prisma.productionOrderItem.deleteMany({
         where: { productionOrderId: existing.id }
       });
+    }
+
+    const targetStatus = data.status || existing.status;
+    const isDraft = targetStatus === 'Draft';
+    const isBecomingSubmitted = existing.status === 'Draft' && targetStatus !== 'Draft';
+
+    let resolvedMachine: string | null = null;
+    if (isDraft) {
+      resolvedMachine = null;
+    } else if (isBecomingSubmitted) {
+      resolvedMachine = normalizeMachineCode(data.assignedMachine || (existing as any).assignedMachine) || 'EXT-01';
+    } else if (data.assignedMachine !== undefined) {
+      resolvedMachine = normalizeMachineCode(data.assignedMachine) || 'EXT-01';
+    } else {
+      resolvedMachine = (existing as any).assignedMachine ? (normalizeMachineCode((existing as any).assignedMachine) || 'EXT-01') : 'EXT-01';
     }
 
     const updatePayload: any = {
@@ -469,9 +495,9 @@ router.put('/:id', async (req: Request, res: Response) => {
       insurance: data.insurance !== undefined ? data.insurance : existing.insurance,
       waybillPartB: data.waybillPartB !== undefined ? data.waybillPartB : existing.waybillPartB,
       dispatchDate: data.dispatchDate ? new Date(data.dispatchDate) : existing.dispatchDate,
-      status: data.status || existing.status,
+      status: targetStatus,
       assignedTo: data.assignedTo || existing.assignedTo,
-      assignedMachine: normalizeMachineCode(data.assignedMachine !== undefined ? data.assignedMachine : (existing as any).assignedMachine),
+      assignedMachine: resolvedMachine,
       tags: data.tags !== undefined ? data.tags : existing.tags,
       attachments: data.attachments || existing.attachments
     };
@@ -489,9 +515,9 @@ router.put('/:id', async (req: Request, res: Response) => {
           grade: it.grade || '',
           jointStatus: it.jointStatus || it.rollJoint || 'No Joint',
           dieSelection: it.dieSelection || it.die || '',
-          assignedMachine: normalizeMachineCode(it.assignedMachine || data.assignedMachine || (existing as any).assignedMachine),
+          assignedMachine: isDraft ? null : (normalizeMachineCode(it.assignedMachine || resolvedMachine) || 'EXT-01'),
           priority: it.priority || 'Normal',
-          status: it.status || (data.status === 'Draft' ? 'Queued' : (data.status || 'Queued')),
+          status: isDraft ? 'Draft' : (it.status || 'Queued'),
           completionPercentage: it.completionPercentage !== undefined ? parseFloat(it.completionPercentage) : 0,
           sequenceOrder: it.sequenceOrder ? parseInt(it.sequenceOrder, 10) : index + 1,
           noOfArticles: it.noOfArticles ? parseInt(it.noOfArticles, 10) : 0,
@@ -518,6 +544,32 @@ router.put('/:id', async (req: Request, res: Response) => {
         client: true
       }
     });
+
+    // Synchronize item machines if machine/status was updated on the order without sending full items
+    if (isBecomingSubmitted && (!data.items || !Array.isArray(data.items))) {
+      await prisma.productionOrderItem.updateMany({
+        where: { productionOrderId: existing.id },
+        data: {
+          assignedMachine: resolvedMachine || 'EXT-01',
+          status: 'Queued'
+        }
+      }).catch(err => console.warn('Could not sync item machines on submit:', err.message));
+    } else if (isDraft && (!data.items || !Array.isArray(data.items))) {
+      await prisma.productionOrderItem.updateMany({
+        where: { productionOrderId: existing.id },
+        data: {
+          assignedMachine: null,
+          status: 'Draft'
+        }
+      }).catch(err => console.warn('Could not reset item machines to draft:', err.message));
+    } else if (data.assignedMachine !== undefined && (!data.items || !Array.isArray(data.items))) {
+      await prisma.productionOrderItem.updateMany({
+        where: { productionOrderId: existing.id },
+        data: {
+          assignedMachine: resolvedMachine
+        }
+      }).catch(err => console.warn('Could not sync item machines in PUT:', err.message));
+    }
 
     // Activity Log
     try {
@@ -572,7 +624,7 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
     const { assignedMachine, status, priority, sequenceOrder, completionPercentage } = req.body;
 
     const dataToUpdate: any = {};
-    if (assignedMachine !== undefined) dataToUpdate.assignedMachine = String(assignedMachine);
+    if (assignedMachine !== undefined) dataToUpdate.assignedMachine = normalizeMachineCode(String(assignedMachine));
     if (status !== undefined) dataToUpdate.status = status;
     if (priority !== undefined) dataToUpdate.priority = priority;
     if (sequenceOrder !== undefined) dataToUpdate.sequenceOrder = Number(sequenceOrder);
@@ -633,15 +685,30 @@ router.patch('/items/:itemId', async (req: Request, res: Response) => {
       });
 
       if (existingOrder) {
-        if (existingOrder.status === 'Completed' && status && status !== 'Completed' && !req.body.allowRestart) {
+        if (existingOrder.status === 'Draft' && assignedMachine !== undefined) {
           return res.status(400).json({
-            error: `Production for order ${existingOrder.orderNumber || existingOrder.id} is already completed and cannot be restarted.`,
-            isCompleted: true
+            error: `Order ${existingOrder.orderNumber || existingOrder.id} is in Draft. Submit the order before assigning a machine line.`,
+            isDraft: true
           });
         }
 
+        if (existingOrder.status === 'Completed' && !req.body.allowRestart) {
+          if (status && status !== 'Completed') {
+            return res.status(400).json({
+              error: `Production for order ${existingOrder.orderNumber || existingOrder.id} is already completed and cannot be restarted.`,
+              isCompleted: true
+            });
+          }
+          if (assignedMachine !== undefined && normalizeMachineCode(String(assignedMachine)) !== normalizeMachineCode((existingOrder as any).assignedMachine || 'EXT-01')) {
+            return res.status(400).json({
+              error: `Production for order ${existingOrder.orderNumber || existingOrder.id} is already completed. Machine cannot be changed.`,
+              isCompleted: true
+            });
+          }
+        }
+
         const orderUpdate: any = {};
-        if (assignedMachine !== undefined) orderUpdate.assignedMachine = String(assignedMachine);
+        if (assignedMachine !== undefined) orderUpdate.assignedMachine = normalizeMachineCode(String(assignedMachine));
         if (status !== undefined) orderUpdate.status = status;
 
         await prisma.productionOrder.update({
