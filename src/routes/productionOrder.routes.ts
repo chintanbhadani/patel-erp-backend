@@ -42,8 +42,8 @@ export function computeOrderProductionStatus(order: any): {
   assignedMachine: string;
 } {
   const items = order.items || [];
-  if (order.status === 'Draft') {
-    return { productionStatus: 'Draft', productionProgress: 0, assignedMachine: '' };
+  if (order.status === 'Draft' || order.status === 'Cancelled') {
+    return { productionStatus: (order.status === 'Cancelled' ? 'Cancelled' : 'Draft') as any, productionProgress: 0, assignedMachine: '' };
   }
 
   const rawMachine = order.assignedMachine || items[0]?.assignedMachine || 'EXT-01';
@@ -436,10 +436,11 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const targetStatus = data.status || existing.status;
     const isDraft = targetStatus === 'Draft';
-    const isBecomingSubmitted = existing.status === 'Draft' && targetStatus !== 'Draft';
+    const isCancelled = targetStatus === 'Cancelled';
+    const isBecomingSubmitted = existing.status === 'Draft' && targetStatus !== 'Draft' && !isCancelled;
 
     let resolvedMachine: string | null = null;
-    if (isDraft) {
+    if (isDraft || isCancelled) {
       resolvedMachine = null;
     } else if (isBecomingSubmitted) {
       resolvedMachine = normalizeMachineCode(data.assignedMachine || (existing as any).assignedMachine) || 'EXT-01';
@@ -562,6 +563,14 @@ router.put('/:id', async (req: Request, res: Response) => {
           status: 'Draft'
         }
       }).catch(err => console.warn('Could not reset item machines to draft:', err.message));
+    } else if (isCancelled && (!data.items || !Array.isArray(data.items))) {
+      await prisma.productionOrderItem.updateMany({
+        where: { productionOrderId: existing.id },
+        data: {
+          assignedMachine: null,
+          status: 'Cancelled'
+        }
+      }).catch(err => console.warn('Could not reset item machines to cancelled:', err.message));
     } else if (data.assignedMachine !== undefined && (!data.items || !Array.isArray(data.items))) {
       await prisma.productionOrderItem.updateMany({
         where: { productionOrderId: existing.id },
