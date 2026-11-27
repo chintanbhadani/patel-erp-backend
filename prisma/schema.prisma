@@ -835,3 +835,73 @@ model MachineMaster {
   updatedAt               DateTime @default(now()) @updatedAt
 }
 
+model DailyPlantLog {
+  id                    String                      @id @default(uuid())
+  date                  DateTime                    @unique
+  remarks               String?
+  pgvclBillAmount       Decimal?                    @default(0) @db.Decimal(12, 2)
+  powerCostPerKg        Decimal?                    @default(0) @db.Decimal(10, 2)
+  status                String                      @default("Submitted")
+  
+  materialConsumptions  DailyMaterialConsumption[]
+  wastage               DailyWastageEntry?
+  ancillaries           DailyAncillaryEntry?
+
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  @@index([date])
+}
+
+model DailyMaterialConsumption {
+  id              String         @id @default(uuid())
+  plantLogId      String
+  plantLog        DailyPlantLog  @relation(fields: [plantLogId], references: [id], onDelete: Cascade)
+  gradeCode       String         // "F", "G", "M", "E", "V"
+  consumedKg      Decimal        @default(0) @db.Decimal(10, 2)
+  purchasedKg     Decimal        @default(0) @db.Decimal(10, 2)
+  closingStockKg  Decimal        @default(0) @db.Decimal(12, 2)
+}
+
+model DailyWastageEntry {
+  id              String         @id @default(uuid())
+  plantLogId      String         @unique
+  plantLog        DailyPlantLog  @relation(fields: [plantLogId], references: [id], onDelete: Cascade)
+  burntWasteKg    Decimal        @default(0) @db.Decimal(10, 2)
+  stockWasteKg    Decimal        @default(0) @db.Decimal(10, 2)
+  plantWasteKg    Decimal        @default(0) @db.Decimal(10, 2)
+  totalWasteKg    Decimal        @default(0) @db.Decimal(10, 2)
+}
+
+model DailyAncillaryEntry {
+  id                String         @id @default(uuid())
+  plantLogId        String         @unique
+  plantLog          DailyPlantLog  @relation(fields: [plantLogId], references: [id], onDelete: Cascade)
+  
+  // Raffia Patta
+  pattaPurKg        Decimal        @default(0) @db.Decimal(10, 2)
+  pattaPurNos       Int            @default(0)
+  pattaStockNos     Int            @default(0)
+
+  // Raffia Bag
+  bagPurKg          Decimal        @default(0) @db.Decimal(10, 2)
+  bagPurNos         Int            @default(0)
+  bagStockNos       Int            @default(0)
+
+  // Paper Core
+  paperCorePurNos   Int            @default(0)
+  paperCoreUsedNos  Int            @default(0)
+  paperCoreStockNos Int            @default(0)
+
+  // Lumps (Extrusion Purges)
+  lumpsGenKg        Decimal        @default(0) @db.Decimal(10, 2)
+  lumpsSalesKg      Decimal        @default(0) @db.Decimal(10, 2)
+  lumpsStockKg      Decimal        @default(0) @db.Decimal(10, 2)
+
+  // Jali Breaker (Extruder Wire Mesh Filters)
+  jaliPurNos        Int            @default(0)
+  jaliUsedNos       Int            @default(0)
+  jaliStockNos      Int            @default(0)
+}
+
+

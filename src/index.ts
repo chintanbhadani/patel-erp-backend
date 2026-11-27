@@ -36,6 +36,7 @@ import machineRouter from './routes/machine.routes';
 import coreRouter from './routes/core.routes';
 import dieRouter from './routes/die.routes';
 import gradeRouter from './routes/grade.routes';
+import dailyPlantLogRouter from './routes/dailyPlantLog.routes';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -96,6 +97,7 @@ app.use('/api/machines', machineRouter);
 app.use('/api/cores', coreRouter);
 app.use('/api/dies', dieRouter);
 app.use('/api/grades', gradeRouter);
+app.use('/api/daily-plant-log', dailyPlantLogRouter);
 
 // Start IoT Scale Listener (TCP Server)
 const IOT_SCALE_PORT = Number(process.env.IOT_SCALE_PORT) || 9000;

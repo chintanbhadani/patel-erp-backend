@@ -286,6 +286,38 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
 
+    // Validate at least one item and required item fields
+    const itemsList = data.items;
+    if (!itemsList || !Array.isArray(itemsList) || itemsList.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required in the Production Order' });
+    }
+
+    for (let i = 0; i < itemsList.length; i++) {
+      const it = itemsList[i];
+      const rowNo = i + 1;
+      const strap = String(it.strapSizeLength || it.sizeLength || '').trim();
+      const qty = Number(it.qty !== undefined ? it.qty : (it.quantity !== undefined ? it.quantity : 0));
+      const netWt = Number(it.netWtOfArticles !== undefined ? it.netWtOfArticles : (it.netWtArticles !== undefined ? it.netWtArticles : 0));
+      const totalWt = Number(it.totalWt !== undefined ? it.totalWt : (qty > 0 && netWt > 0 ? qty * netWt : 0));
+      const palletQty = String(it.palletQty || it.palletQuantity || '').trim();
+
+      if (!strap) {
+        return res.status(400).json({ error: `Item #${rowNo}: Item / Strap Spec is required` });
+      }
+      if (netWt <= 0) {
+        return res.status(400).json({ error: `Item #${rowNo}: Kg per Roll is required and must be greater than 0` });
+      }
+      if (qty <= 0) {
+        return res.status(400).json({ error: `Item #${rowNo}: Qty is required and must be greater than 0` });
+      }
+      if (totalWt <= 0) {
+        return res.status(400).json({ error: `Item #${rowNo}: Total Wt is required and must be greater than 0` });
+      }
+      if (!palletQty) {
+        return res.status(400).json({ error: `Item #${rowNo}: Rolls per Pallet is required` });
+      }
+    }
+
     const generatedNo = await generateNextOrderNumber(data.orderSheetDate);
     const orderNumber = data.orderNumber || generatedNo;
 
@@ -427,8 +459,38 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    // Replace items only if items array is explicitly provided in the request
-    if (data.items && Array.isArray(data.items)) {
+    // Validate items if items array is explicitly provided in the request
+    if (data.items !== undefined) {
+      if (!Array.isArray(data.items) || data.items.length === 0) {
+        return res.status(400).json({ error: 'At least one item is required in the Production Order' });
+      }
+
+      for (let i = 0; i < data.items.length; i++) {
+        const it = data.items[i];
+        const rowNo = i + 1;
+        const strap = String(it.strapSizeLength || it.sizeLength || '').trim();
+        const qty = Number(it.qty !== undefined ? it.qty : (it.quantity !== undefined ? it.quantity : 0));
+        const netWt = Number(it.netWtOfArticles !== undefined ? it.netWtOfArticles : (it.netWtArticles !== undefined ? it.netWtArticles : 0));
+        const totalWt = Number(it.totalWt !== undefined ? it.totalWt : (qty > 0 && netWt > 0 ? qty * netWt : 0));
+        const palletQty = String(it.palletQty || it.palletQuantity || '').trim();
+
+        if (!strap) {
+          return res.status(400).json({ error: `Item #${rowNo}: Item / Strap Spec is required` });
+        }
+        if (netWt <= 0) {
+          return res.status(400).json({ error: `Item #${rowNo}: Kg per Roll is required and must be greater than 0` });
+        }
+        if (qty <= 0) {
+          return res.status(400).json({ error: `Item #${rowNo}: Qty is required and must be greater than 0` });
+        }
+        if (totalWt <= 0) {
+          return res.status(400).json({ error: `Item #${rowNo}: Total Wt is required and must be greater than 0` });
+        }
+        if (!palletQty) {
+          return res.status(400).json({ error: `Item #${rowNo}: Rolls per Pallet is required` });
+        }
+      }
+
       await prisma.productionOrderItem.deleteMany({
         where: { productionOrderId: existing.id }
       });
